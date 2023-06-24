@@ -1,0 +1,17 @@
+[
+  { "id": "m_File", "items": [
+    { "id": "cmdOpen", "accelerator": "meta O" },
+    { "id": "cmdNew", "accelerator":  "meta N" },
+    {},
+    { "id" : "cmdSave", "accelerator" : "meta S" },
+    { "id" : "cmdSaveAs" },
+    {},
+    { "id": "cmdClose" }
+    ]
+  },
+  { "id" : "m_Edit", "items" :  [
+    { "id":  "cmdCut", "accelerator": "meta C" },
+    { "id":  "cmdCopy", "accelerator": "meta X" },
+    { "id":  "cmdPaste", "accelerator": "meta V" }
+  ]}
+]
