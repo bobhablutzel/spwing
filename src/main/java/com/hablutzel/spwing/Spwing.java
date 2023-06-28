@@ -25,8 +25,6 @@ import com.hablutzel.spwing.context.DocumentScope;
 import com.hablutzel.spwing.context.DocumentScopeManager;
 import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.converter.*;
-import com.hablutzel.spwing.util.*;
-import com.hablutzel.spwing.view.ViewWindowListener;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.events.DocumentEventPublisher;
 import com.hablutzel.spwing.invoke.Invoker;
@@ -34,6 +32,8 @@ import com.hablutzel.spwing.invoke.ParameterDescription;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.menu.MenuLoader;
 import com.hablutzel.spwing.model.ModelFactory;
+import com.hablutzel.spwing.util.*;
+import com.hablutzel.spwing.view.ViewWindowListener;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -56,8 +56,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.lang.reflect.Method;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -599,12 +599,6 @@ public class Spwing implements ApplicationContextAware  {
     }
 
 
-
-    private boolean isMenuSource(Object component) {
-        return AnnotatedElementUtils.findMergedAnnotation(component.getClass(), MenuSource.class) != null;
-    }
-
-
     /**
      * Get the active model object.
      *
@@ -843,7 +837,7 @@ public class Spwing implements ApplicationContextAware  {
         // or model to provide the menu bar instead. Since those are
         // higher in the document component stack, they will take precedence.
         handlersReversed.stream()
-                .map(o -> MenuLoader.build(o))
+                .map(MenuLoader::build)
                 .filter(Objects::nonNull)
                 .findFirst()
                 .ifPresentOrElse(this::menuLoaderFound,
@@ -856,7 +850,7 @@ public class Spwing implements ApplicationContextAware  {
      * This performs the actual menu bar rebuild, as well as remembering
      * the action set so that we can rebuild the action document components later
      *
-     * @param menuLoader
+     * @param menuLoader The menu loader
      */
     private void menuLoaderFound(MenuLoader menuLoader) {
 
