@@ -3,7 +3,7 @@ Spwing
 </p>
 
 <div style="text-align: center;">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/6/61/Narcissus_icon.svg"
+    <img src="https://github.com/bobhablutzel/spwing/blob/main/src/main/resources/com/hablutzel/spwing/component/Spwing.png?raw=true"
          alt="Spwing logo: A daffodil"
          height="100">
     <!-- Spwing logo attribution: CortoFrancese, CC BY-SA 4.0 <https://creativecommons.org/licenses/by-sa/4.0>, via Wikimedia Commons -->

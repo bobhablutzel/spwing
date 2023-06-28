@@ -17,34 +17,30 @@
 
 package com.hablutzel.spwing.view.bind;
 
-import com.hablutzel.spwing.events.DocumentEvent;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.events.DocumentEventInvoker;
 import com.hablutzel.spwing.util.FlexpressionParser;
+import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
+import com.hablutzel.spwing.view.bind.watch.GenericPropertyBinder;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.expression.Expression;
+import org.springframework.expression.ParseException;
 import org.springframework.expression.spel.SpelParseException;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import javax.swing.text.Document;
-import javax.swing.text.JTextComponent;
 import java.awt.*;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
-import java.beans.PropertyChangeEvent;
 import java.util.*;
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
+import java.util.stream.Collectors;
 
 
 @Slf4j
@@ -54,70 +50,31 @@ public class ViewPropertyBinder {
     private final DocumentEventDispatcher documentEventDispatcher;
     private final ConversionService conversionService;
 
-    private final Map<Object, Function<Class<?>, Object>> valueSet;
+    private final Map<Object, Object> valueMap = new HashMap<>();
 
     private final Map<Object, BeanWrapper> beanWrapperMap = new HashMap<>();
-    private final Set<WriteBinder> writeBinders = new HashSet<>();
+    private final List<Binder> binders = new ArrayList<>();
 
 
-
-    public record WriteBinder(Class<?> targetClass, String propertyName, BiConsumer<Object, Accessor> bindFunction ) {
-        public boolean isFor(Class<?> theClass, String propertyName) {
-            return this.propertyName.equals(propertyName) && targetClass.isAssignableFrom(theClass);
-        }
-    }
-
-
-    public ViewPropertyBinder(final ApplicationContext applicationContext,
-                              final DocumentEventDispatcher documentEventDispatcher,
-                              final ConversionService conversionService,
-                              final Map<Object, Function<Class<?>, Object>> valueSet ) {
-        this.applicationContext = applicationContext;
-        this.documentEventDispatcher = documentEventDispatcher;
-        this.conversionService = conversionService;
-        this.valueSet = valueSet;
-        initializeWriteBinders();
-    }
 
     /**
-     * Used to bind an accessor (typically a {@link PropertyAccessor})
-     * to an consumer (typically a setter from a Swing component). The
-     * accessor provides a mechanism for getting the value from the
-     * model, while the setter provides the means for setting the value
-     * in the view (Swing component). The triggers are the list of event
-     * names that signal that the accessor needs to be re-evaluated. Triggers
-     * allow for changes that occur to the model outside the view to be
-     * recognized and reflected in the view; when the trigger events are
-     * processed the accessor will be re-evaluated for the current value
-     * and the setter will be re-invoked.
+     * Create a new {@link ViewPropertyBinder}. This class has the responsibility
+     * of performing bindings between properties of two classes, generally
+     * between a Swing component and a model object.
      *
-     * @param viewPropertyAccessor The view accessor
-     * @param authoritativeAccessor The accessor (typically a {@link PropertyAccessor} for a model property
-     * @param triggers The trigger list for re-evaluating the accessor
-     * @param expectedClass      The expected type being accessed.
+     * @param applicationContext The {@link ApplicationContext}
      */
-    private void bindWithRefresh(final Accessor viewPropertyAccessor,
-                                final Accessor authoritativeAccessor,
-                                final List<String> triggers,
-                                final Class<?> expectedClass) {
-        viewPropertyAccessor.set(authoritativeAccessor.get(expectedClass));
-        if (Objects.nonNull(triggers)) {
-            triggers.forEach(trigger -> {
-                documentEventDispatcher.registerListener(trigger, new DocumentEventInvoker(applicationContext) {
-                    @Override
-                    protected void handleDocumentEvent(DocumentEvent documentEvent) {
-                        if (viewPropertyAccessor.isIcon()) {
-                            log.info( "Setting icon to {} (a {})", authoritativeAccessor.get(expectedClass), expectedClass.getName());
-                        }
-                        Object newValue = authoritativeAccessor.get(expectedClass);
-                        if (!viewPropertyAccessor.get(expectedClass).equals(newValue)) {
-                            viewPropertyAccessor.set(newValue);
-                        }
-                    }
-                });
-            });
-        }
+    public ViewPropertyBinder(final ApplicationContext applicationContext ) {
+        this.applicationContext = applicationContext;
+        this.documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
+        this.conversionService = applicationContext.getBean(ConversionService.class);
+
+        // Get all the binder services, and add the (non-service) last chance binder
+        // by hand.
+        binders.addAll(applicationContext.getBeansOfType(Binder.class).values());
+        binders.add(new GenericPropertyBinder());
     }
+
 
 
     /**
@@ -130,6 +87,15 @@ public class ViewPropertyBinder {
         return beanWrapperMap.get(object);
     }
 
+
+    /**
+     * Define the value for a component. This is used for some bindings
+     * @param component The component to remember a value for
+     * @param value The value to remember
+     */
+    public void setValue(@NonNull final Object component, @NonNull final Object value) {
+        valueMap.put(component, value);
+    }
 
     /**
      * Takes the given expression (a property path, SPEL expression, literal, etc.)
@@ -148,65 +114,37 @@ public class ViewPropertyBinder {
      */
 
     public Accessor toAccessor(@Nullable final Object targetObject, final String valueExpression) {
+
+        // First preference: A property, as this will allow read/write
         if (Objects.nonNull(targetObject)) {
             BeanWrapper targetBeanWrapper = beanWrapperFor(targetObject);
             if (targetBeanWrapper.isReadableProperty(valueExpression)) {
                 return new PropertyAccessor(targetBeanWrapper, valueExpression, conversionService);
-            } else {
-                SpelExpressionParser parser = new SpelExpressionParser();
-                try {
-                    Expression spelExpression = parser.parseExpression(valueExpression);
-                    StandardEvaluationContext context = new StandardEvaluationContext(targetObject);
-                    return new SpelExpressionAccessor(spelExpression, context, conversionService);
-                } catch (SpelParseException e) {
-                    log.info( "{} is not a SPEL expression", valueExpression);
-                }
             }
         }
 
-        // Not a property, see if it's an expression or a literal
-        return FlexpressionParser.appearsToBeFlexpression(valueExpression)
-                ? new FlexpressionAccessor(valueExpression, applicationContext, conversionService)
-                : new LiteralAccessor(valueExpression, conversionService);
+        log.warn( "{} is not a property of {} and will read-only", valueExpression, targetObject );
+        // Not a property, try a SPEL expression. Allows more flexibility than a property
+        // but isn't writeable
+        try {
+            SpelExpressionParser parser = new SpelExpressionParser();
+            Expression spelExpression = parser.parseExpression(valueExpression);
+            StandardEvaluationContext context = new StandardEvaluationContext(targetObject);
+            return new SpelExpressionAccessor(spelExpression, context, conversionService);
+        } catch (ParseException e) {
+            log.debug( "Unable to treat {} as an expression", valueExpression, e);
+        }
+
+        // Next try is a flexpression, which can be used to pull in application properties
+        if (FlexpressionParser.appearsToBeFlexpression(valueExpression)) {
+            return new FlexpressionAccessor(valueExpression, applicationContext, conversionService);
+        }
+
+        // Last chance, a literal
+        return  new LiteralAccessor(valueExpression, conversionService);
     }
 
-    /**
-     * Watch for changes in a {@link JTextComponent} subclass. This will catch
-     * both changes to the document and changes to the document component itself.
-     * When changes occur, the {@link Accessor} (which must be writable - see
-     * {@link Accessor#isWriteable()} will be called to change the value. Typically
-     * this will be a {@link PropertyAccessor} and will therefore change the
-     * described property.
-     *
-     * @param textComponent The {@link JTextComponent} subclass instance
-     * @param accessor      The accessor - typically a {@link PropertyAccessor}
-     */
-    public void watchText(JTextComponent textComponent, Accessor accessor) {
-        TextComponentListener textComponentListener = new TextComponentListener(accessor, textComponent);
-        textComponent.addPropertyChangeListener("document", (
-                PropertyChangeEvent e) -> {
-            Document oldDocument = (Document) e.getOldValue();
-            Document newDocument = (Document) e.getNewValue();
-            if (Objects.nonNull(oldDocument)) oldDocument.removeDocumentListener(textComponentListener);
-            if (Objects.nonNull(newDocument)) newDocument.addDocumentListener(textComponentListener);
-            textComponentListener.changedUpdate(null);
-        });
-        Document document = textComponent.getDocument();
-        if (document != null) document.addDocumentListener(textComponentListener);
-    }
 
-    public void watchButton( AbstractButton button, Accessor accessor ) {
-        button.addChangeListener(new ChangeListener() {
-            @Override
-            public void stateChanged(ChangeEvent e) {
-                boolean isButtonSelected = button.isSelected();
-                boolean isModelSelected = accessor.get(Boolean.class);
-                if (isButtonSelected != isModelSelected) {
-                    accessor.set(isButtonSelected);
-                }
-            }
-        });
-    }
 
 
 
@@ -215,18 +153,20 @@ public class ViewPropertyBinder {
                                   final Accessor accessor,
                                   final List<String> triggers ) {
 
+        // Create the new button group, add all the buttons
         ButtonGroup buttonGroup = new ButtonGroup();
         buttons.forEach(buttonGroup::add);
-        buttons.forEach( button -> {
-            buttonGroup.add(button);
-            button.addItemListener(new ItemListener() {
-                @Override
-                public void itemStateChanged(ItemEvent e) {
-                    Object value = valueSet.containsKey(button) ? valueSet.get(button).apply(Object.class) : null;
-                    log.info( "Clicked on a button named {}, value {}", button.getName(), value);
-                }
-            });
-        });
+
+        // Build the list of values from the buttons
+        Map<AbstractButton, Object> buttonValues = buttons.stream().collect(Collectors.toMap(
+                element -> element,
+                valueMap::get
+        ));
+
+        ButtonGroupController buttonGroupController = new ButtonGroupController(buttonGroup);
+
+        // Now bind the group
+        bind(buttonGroupController, property, buttonValues, accessor, triggers);
     }
 
     /**
@@ -256,65 +196,141 @@ public class ViewPropertyBinder {
      * @param triggers                A list of triggers for updating the property by re-evaluating the expression
      * @return TRUE if the bind was successful
      */
-    public boolean bind(final Component viewObject,
+    @SuppressWarnings("unchecked")
+    public boolean bind(final Object viewObject,
                         final String viewObjectProperty,
                         final Accessor authoritativeValue,
                         final List<String> triggers) {
+        return bind(viewObject, viewObjectProperty, valueMap.get(viewObjectProperty), authoritativeValue, triggers);
+    }
+
+
+    /**
+     * Binds a property of a view {@link Component} to an authoritative value. The view property
+     * can be any settable property of the component - often something like
+     * {@link javax.swing.JLabel#setText(String)} or {@link JCheckBox#setSelected(boolean)}, but could
+     * be other properties ({@link JComponent#setFont(Font)} for example. The view
+     * properties are specified as a property path on the given object: "text", "selected", and
+     * "font" respectively for the above examples. The properties must be readable and writable
+     * on the view object. <br>
+     * The authoritative value represents the value that the view property is bound to. It
+     * is often a {@link PropertyAccessor} representing a property of a model or controller object,
+     * but could be a property of another bean (such as the application), or an expression or literal.
+     * The authoritative value must be readable, and <i>may</i> be writable. If it is writeable,
+     * changes by the user to the component will be written to the authoritative state. This is less
+     * useful for things like {@link JComponent#setFont(Font)}; it is generally used with the primary
+     * value represented by the {@link Component} - {@link JLabel#setText(String)}, {@link JCheckBox#setSelected(boolean)},
+     * etc. <br>
+     * The binding also allows the authoritative value to change outside the control of the bound
+     * {@link Component}. This supports values that are dependent on other model values, read from databases,
+     * or other use cases. The binding allows for changes in the authoritative value to be signalled by
+     * one or more events, given by the triggers.
+     *
+     * @param viewObject              A object to bind a property against (typically a view object)
+     * @param viewObjectProperty      The property to bind against
+     * @param authoritativeValue      An {@link Accessor} for the authorative value
+     * @param triggers                A list of triggers for updating the property by re-evaluating the expression
+     * @return TRUE if the bind was successful
+     */
+    @SuppressWarnings("unchecked")
+    public boolean bind(@NonNull final Object viewObject,
+                        @NonNull final String viewObjectProperty,
+                        @NonNull final Object viewObjectValue,
+                        @NonNull final Accessor authoritativeValue,
+                        @NonNull final List<String> triggers) {
+
+
+        // Block bindings to the name property
+        if (invalidTargetProperty(viewObjectProperty)) return false;
 
         // Get the view object bean wrapper. Make sure the property is writable
         BeanWrapper viewObjectBeanWrapper = beanWrapperFor(viewObject);
         if (viewObjectBeanWrapper.isWritableProperty(viewObjectProperty)) {
 
-            // Get the property type. Validate that the accessor can give a valid value
-            // for that property
-            PropertyAccessor viewPropertyAccessor = new PropertyAccessor(viewObjectBeanWrapper, viewObjectProperty, conversionService);
-            Class<?> viewPropertyType = viewObjectBeanWrapper.getPropertyType(viewObjectProperty);
-            if (authoritativeValue.canSupply(viewPropertyType)) {
+            // See if there is a binder for this property given the source type
+            binders.stream()
+                    .filter(binder -> binder.binds(viewObjectBeanWrapper, viewObjectProperty, authoritativeValue))
+                    .findFirst()
+                    .ifPresentOrElse(binder -> binder.bind(viewObjectBeanWrapper, viewObjectProperty, viewObjectValue, authoritativeValue, triggers, applicationContext),
+                            () -> log.error("Unable to find a binding for property {}", viewObjectProperty));
 
-                // Get a consumer for writing to this property, and bind it to the accessor
-                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, viewPropertyType);
-
-                // See if the authoritative value is writable
-                if (authoritativeValue.isWriteable()) {
-                    Class<?> viewObjectClass = viewObject.getClass();
-
-                    // Generally speaking, we only want certain view object properties
-                    // to write to the authoritative model. For JTextComponents, we want
-                    // to watch when the text changes. For AbstractButtons, it is the button
-                    // state, and so forth. The write binders know about the properties
-                    // that we want to watch, and can do the right adaptation for
-                    // changes to those properties.
-                    writeBinders.stream()
-                            .filter(writeBinder -> writeBinder.isFor(viewObjectClass, viewObjectProperty))
-                            .findFirst()
-                            .ifPresent( writeBinder -> writeBinder.bindFunction.accept(viewObject, authoritativeValue));
-                } else {
-                    // If we can't write the value, then prevent the user from changing it.
-                    // It can still be changed by trigger events
-                    viewObject.setEnabled(false);
-                }
-            } else {
-                log.info( "Conversion service: {}", conversionService);
-                log.error( "The expression {} cannot provide a {}", authoritativeValue,  viewPropertyType );
-            }
             return true;
-
         } else {
+            log.warn( "Property {} is not a writeable property for the item", viewObjectProperty);
             return false;
         }
+
+//
+//            if (authoritativeValue.canSupply(viewPropertyType)) {
+//
+//                // Get a consumer for writing to this property, and bind it to the accessor
+//                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, viewPropertyType);
+//
+//                // See if the authoritative value is writable
+//                if (authoritativeValue.isWriteable()) {
+//                    Class<?> viewObjectClass = viewObject.getClass();
+//
+//                    // Find a watch binder that can watch for changes to this specific
+//                    // property and update the writable value of the authoritative object.
+//                    binders.stream()
+//                            .filter(binder -> viewObjectProperty.equals(binder.getProperty()) &&
+//                                    binder.getTarget().isAssignableFrom(viewObjectClass))
+//                            .findFirst()
+//                            .ifPresent(binder -> binder.bind(, viewObject, authoritativeValue, valueMap.get(viewObject)));
+//                } else {
+//                    // If we can't write the value, then prevent the user from changing it.
+//                    // It can still be changed by trigger events
+//                    if (viewObject instanceof Component component) {
+//                        component.setEnabled(false);
+//                    }
+//                }
+//            } else {
+//                log.error( "The expression {} cannot provide a {}", authoritativeValue,  viewPropertyType );
+//            }
+//            return true;
+//
+//        } else {
+//            return false;
+//        }
     }
 
 
-    public void initializeWriteBinders() {
-        addWriteBinder(JTextComponent.class, "text", this::watchText );
-        addWriteBinder(AbstractButton.class, "selected", this::watchButton);
-    }
 
-    public <T> void addWriteBinder( Class<T> targetClass, String propertyName, BiConsumer<T, Accessor> theBinder ) {
-        writeBinders.add(new WriteBinder( targetClass, propertyName, (object, accessor) -> {
-            if (targetClass.isInstance(object)) {
-                theBinder.accept((T) object, accessor);
+    public boolean bindGroup( @NonNull final List<Object> targetElements,
+                              @NonNull final String targetProperty,
+                              @NonNull final Accessor modelAccessor,
+                              @NonNull final List<String> triggers ) {
+
+        // Make sure we aren't binding to "name"
+        if (invalidTargetProperty(targetProperty)) return false;
+
+        // Get the bean wrappers for the elements
+        List<BeanWrapper> beanWrappers = targetElements.stream().map(this::beanWrapperFor).toList();
+
+        try {
+
+            // Ensure that all the bean wrappers have the property in question. If one doesn't
+            // this request will throw.
+            beanWrappers.forEach(beanWrapper -> beanWrapper.getPropertyDescriptor(targetProperty));
+
+            // If they are all buttons, create a button group
+            if (targetElements.stream().allMatch(component -> component instanceof AbstractButton)) {
+
+                final List<AbstractButton> buttonList = targetElements.stream().map(component -> (AbstractButton) component).toList();
+                bindButtonGroup(buttonList, targetProperty, modelAccessor, triggers);
+                return true;
             }
-        } ));
+        } catch (BeansException e) {
+            log.error("Property {} not available for all members of the group", targetProperty);
+        }
+        return false;
+    }
+
+    private static boolean invalidTargetProperty(String targetProperty) {
+        if ("name".equals(targetProperty)) {
+            log.error("Cannot bind to the name property");
+            return true;
+        }
+        return false;
     }
 }

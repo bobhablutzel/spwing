@@ -30,9 +30,8 @@ public class PropertyAccessor extends Accessor {
 
     private final BeanWrapper beanWrapper;
     private final String propertyDescription;
+    @ToString.Exclude
     private final ConversionService conversionService;
-
-    public boolean isIcon() { return propertyDescription.equals("icon" ); }
 
     public boolean isWriteable() {
         return beanWrapper.isWritableProperty(propertyDescription);
@@ -42,8 +41,12 @@ public class PropertyAccessor extends Accessor {
         beanWrapper.setPropertyValue(propertyDescription, value);
     }
 
-    public <T> T get(Class<T> clazz) {
-        return conversionService.convert(beanWrapper.getPropertyValue(propertyDescription), clazz);
+    public Object get(Class<?> targetClass) {
+        if (targetClass.isEnum() || Enum.class.isAssignableFrom(targetClass)) {
+            return beanWrapper.getPropertyValue(propertyDescription);
+        } else {
+            return conversionService.convert(beanWrapper.getPropertyValue(propertyDescription), targetClass);
+        }
     }
 
     @Override

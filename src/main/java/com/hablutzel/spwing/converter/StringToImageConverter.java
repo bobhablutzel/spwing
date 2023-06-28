@@ -16,24 +16,13 @@
 
 package com.hablutzel.spwing.converter;
 
-import com.hablutzel.spwing.util.ResourceUtils;
-import lombok.RequiredArgsConstructor;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FilenameUtils;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 
 
 /**
@@ -46,14 +35,14 @@ import java.util.Objects;
 @Slf4j
 public class StringToImageConverter extends BaseStringToImageConverter implements Converter<String, Image> {
 
-    public StringToImageConverter(Class<?> contextRoot, ResourceUtils resourceUtils) {
-        super(contextRoot, resourceUtils);
+    public StringToImageConverter(Class<?> contextRoot) {
+        super(contextRoot);
     }
 
     @Override
     @Nullable
     public Image convert(@NonNull final String imageName) {
-        return getimage(imageName);
+        return getImage(imageName);
     }
 
 }

@@ -122,6 +122,11 @@ public class ComponentFactory {
         return buttonGroup;
     }
 
+    public ButtonGroup newAnonymousButtonGroup() {
+        return new ButtonGroup();
+    }
+
+
     public JFrame newJFrame(@NonNull final String name) {
         return registerAdapter( new JFrame(name), name, JFrameEventAdapter::new);
     }

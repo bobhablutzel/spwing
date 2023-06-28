@@ -26,6 +26,7 @@ import org.springframework.core.convert.ConversionService;
 public class FlexpressionAccessor extends Accessor {
 
     private final Object flexpressionValue;
+    @ToString.Exclude
     private final ConversionService conversionService;
 
     public FlexpressionAccessor(final String flexpression,
@@ -44,7 +45,7 @@ public class FlexpressionAccessor extends Accessor {
         throw new UnsupportedOperationException();
     }
 
-    public <T> T get(Class<T> targetClass) {
+    public Object get(Class<?> targetClass) {
         return conversionService.convert(flexpressionValue, targetClass);
     }
 

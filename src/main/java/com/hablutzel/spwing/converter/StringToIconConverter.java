@@ -16,14 +16,13 @@
 
 package com.hablutzel.spwing.converter;
 
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 import javax.swing.*;
-import java.awt.*;
 
 
 /**
@@ -36,14 +35,14 @@ import java.awt.*;
 @Slf4j
 public class StringToIconConverter extends BaseStringToImageConverter implements Converter<String, Icon> {
 
-    public StringToIconConverter(Class<?> contextRoot, ResourceUtils resourceUtils) {
-        super(contextRoot, resourceUtils);
+    public StringToIconConverter(Class<?> contextRoot) {
+        super(contextRoot);
     }
 
     @Override
     @Nullable
     public Icon convert(@NonNull final String imageName) {
-        return new ImageIcon(getimage(imageName));
+        return new ImageIcon(getImage(imageName));
     }
 
 }

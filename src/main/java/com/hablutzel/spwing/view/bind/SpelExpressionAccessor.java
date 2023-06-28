@@ -32,6 +32,8 @@ public class SpelExpressionAccessor extends Accessor {
 
     private final Expression spelExpression;
     private final EvaluationContext evaluationContext;
+
+    @ToString.Exclude
     private final ConversionService conversionService;
 
     @Override
@@ -40,7 +42,7 @@ public class SpelExpressionAccessor extends Accessor {
     }
 
     @Override
-    public <T> T get(Class<T> targetClass) {
+    public Object get(Class<?> targetClass) {
         return spelExpression.getValue(evaluationContext, targetClass);
     }
 

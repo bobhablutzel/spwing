@@ -25,6 +25,7 @@ import org.springframework.core.convert.ConversionService;
 @ToString
 public class LiteralAccessor extends Accessor {
     private final String value;
+    @ToString.Exclude
     private final ConversionService conversionService;
 
     public boolean isWriteable() {
@@ -35,8 +36,8 @@ public class LiteralAccessor extends Accessor {
         throw new UnsupportedOperationException();
     }
 
-    public <T> T get(Class<T> clazz) {
-        return conversionService.convert(value, clazz);
+    public Object get(Class<?> targetClass) {
+        return conversionService.convert(value, targetClass);
     }
 
     @Override

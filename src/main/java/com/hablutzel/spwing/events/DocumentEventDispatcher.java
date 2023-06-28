@@ -17,10 +17,12 @@
 package com.hablutzel.spwing.events;
 
 
+import com.hablutzel.spwing.context.DocumentScopeManager;
 import com.hablutzel.spwing.context.EventAdapter;
 import com.hablutzel.spwing.invoke.Invoker;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 
 import java.util.*;
@@ -32,6 +34,12 @@ public class DocumentEventDispatcher {
 
     @Getter
     private final Map<String, EventAdapter> eventAdapterMap = new HashMap<>();
+
+
+    public static DocumentEventDispatcher get(ApplicationContext applicationContext) {
+        DocumentScopeManager documentScopeManager = applicationContext.getBean("documentScopeManager", DocumentScopeManager.class);
+        return documentScopeManager.getDocumentEventDispatcher();
+    }
 
     @EventListener
     public void handle(DocumentEvent documentEvent) {

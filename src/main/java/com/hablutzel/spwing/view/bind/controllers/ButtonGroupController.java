@@ -15,17 +15,26 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind;
-
-public abstract class Accessor {
-
-    public abstract boolean isWriteable();
-
-    public abstract Object get(Class<?> targetClass);
-
-    public abstract void set(Object value);
-
-    public abstract boolean canSupply(Class<?> targetClass);
+package com.hablutzel.spwing.view.bind.controllers;
 
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import javax.swing.*;
+
+@RequiredArgsConstructor
+@Slf4j
+public class ButtonGroupController {
+
+    @Getter
+    private final ButtonGroup buttonGroup;
+
+    public AbstractButton getSelected() {
+        return null;
+    }
+
+    public void setSelected(AbstractButton button) {
+    }
 }

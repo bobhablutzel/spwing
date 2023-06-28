@@ -17,7 +17,6 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
-import com.hablutzel.spwing.annotations.SVWFComponentFactory;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.view.bind.ViewPropertyBinder;
@@ -26,7 +25,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.core.convert.ConversionService;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -57,9 +55,6 @@ public final class SVWFParseContext {
     @Getter(AccessLevel.MODULE)
     private final Map<Class<?>, Map<String, Object>> defaultValues = new HashMap<>();
 
-    @Getter(AccessLevel.MODULE)
-    private final Map<Object, Function<Class<?>, Object>> valueMap = new HashMap<>();
-
     @Getter
     private final ComponentFactory componentFactory;
 
@@ -69,11 +64,11 @@ public final class SVWFParseContext {
     public SVWFParseContext(final Object modelObject,
                             final Object controllerObject,
                             final ApplicationContext applicationContext,
-                            final DocumentEventDispatcher documentEventDispatcher,
-                            final ConversionService conversionService) {
+                            final DocumentEventDispatcher documentEventDispatcher) {
         this.applicationContext = applicationContext;
         this.componentFactory = new ComponentFactory(modelObject, controllerObject, documentEventDispatcher, knownComponents);
-        this.viewPropertyBinder = new ViewPropertyBinder(applicationContext, documentEventDispatcher, conversionService, valueMap);
+        this.viewPropertyBinder = new ViewPropertyBinder(applicationContext);
+
 
         this.registerKnownSwingClasses();
         this.registerPredefinedComponents();
@@ -145,38 +140,8 @@ public final class SVWFParseContext {
     }
 
     public void registerPredefinedComponents() {
-        knownComponents.put("onePixelBlackLineBorder", new LineBorder(Color.black, 1));
-        knownComponents.put("twoPixelBlackLineBorder", new LineBorder(Color.black, 2));
-        knownComponents.put("threePixelBlackLineBorder", new LineBorder(Color.black, 3));
-        knownComponents.put("fourPixelBlackLineBorder", new LineBorder(Color.black, 4));
-        knownComponents.put("onePixelWhiteLineBorder", new LineBorder(Color.white, 1));
-        knownComponents.put("twoPixelWhiteLineBorder", new LineBorder(Color.white, 2));
-        knownComponents.put("threePixelWhiteLineBorder", new LineBorder(Color.white, 3));
-        knownComponents.put("fourPixelWhiteLineBorder", new LineBorder(Color.white, 4));
-        knownComponents.put("onePixelEmptyBorder", new EmptyBorder(1, 1, 1, 1));
-        knownComponents.put("fivePixelEmptyBorder", new EmptyBorder(5, 5, 5, 5));
-        knownComponents.put("tenPixelEmptyBorder", new EmptyBorder(10, 10, 10, 10));
-
-        // If there are any SVWFComponentFactory instances available, call them to add any
-        // document or application specific components to the predefined component list
-        this.addToPredefinedComponents(applicationContext);
-    }
-
-
-
-    private void addToPredefinedComponents(final ApplicationContext applicationContext) {
-
-        Collection<Object> factoryBeans = applicationContext.getBeansWithAnnotation(SVWFComponentFactory.class).values();
-        for (Object factoryBean : factoryBeans) {
-
-            SVWFComponentFactory svwfComponentFactory = AnnotatedElementUtils.findMergedAnnotation(factoryBean.getClass(), SVWFComponentFactory.class);
-            if (Objects.nonNull(svwfComponentFactory)) {
-                String factoryMethodName = svwfComponentFactory.componentMethod();
-                ReflectiveInvoker.invoke(applicationContext, factoryBean, factoryMethodName, Map.of(
-                        SVWFParseContext.class, () -> this
-                ));
-            }
-        }
+        Collection<SVWFComponentFactory> factoryBeans = applicationContext.getBeansOfType(SVWFComponentFactory.class).values();
+        factoryBeans.forEach(svwfComponentFactory -> svwfComponentFactory.addComponents(this, applicationContext));
     }
 
     public void addComponent(String componentName, Object component) {

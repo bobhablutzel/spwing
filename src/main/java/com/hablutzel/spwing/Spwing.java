@@ -25,7 +25,7 @@ import com.hablutzel.spwing.context.DocumentScope;
 import com.hablutzel.spwing.context.DocumentScopeManager;
 import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.converter.*;
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.*;
 import com.hablutzel.spwing.view.ViewWindowListener;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.events.DocumentEventPublisher;
@@ -34,9 +34,6 @@ import com.hablutzel.spwing.invoke.ParameterDescription;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.menu.MenuLoader;
 import com.hablutzel.spwing.model.ModelFactory;
-import com.hablutzel.spwing.util.KeyBeanAliasProvider;
-import com.hablutzel.spwing.util.KnownObjectsInjector;
-import com.hablutzel.spwing.util.ResultHolder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -53,8 +50,6 @@ import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.converter.Converter;
-import org.springframework.core.env.StandardEnvironment;
-import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
@@ -148,10 +143,6 @@ public class Spwing implements ApplicationContextAware  {
      */
     private final ApplicationConfiguration applicationConfiguration;
 
-    /**
-     * The {@link com.hablutzel.spwing.util.ResourceUtils} bean
-     */
-    private final ResourceUtils resourceUtils;
 
     private final CommandMethodsScanner commandMethodsScanner;
 
@@ -218,7 +209,7 @@ public class Spwing implements ApplicationContextAware  {
      *                    the application class itself or a configuration
      *                    instance.
      */
-    public static Spwing launch(Class<?> contextRoot) {
+    public static Spwing launch(final Class<?> contextRoot) {
 
         // Create a configuration for the application, based on the context root.
         ApplicationConfiguration applicationConfiguration = new ApplicationConfiguration(contextRoot);
@@ -232,7 +223,7 @@ public class Spwing implements ApplicationContextAware  {
         performBootstrapConfiguration(applicationConfiguration);
 
         // Build the message source for the UI class; this contains all the framework messages
-        ResourceBundleMessageSource rootMessageSource = new ResourceBundleMessageSource();
+        PlatformResourceBundleMessageSource rootMessageSource = new PlatformResourceBundleMessageSource();
         rootMessageSource.setBundleClassLoader(Spwing.class.getClassLoader());
         rootMessageSource.addBasenames(Spwing.class.getName());
         rootMessageSource.setUseCodeAsDefaultMessage(true);
@@ -241,8 +232,8 @@ public class Spwing implements ApplicationContextAware  {
         // Attempt to find a resource bundle for the application
         try {
             // See if the application resource bundle can be loaded
-            ResourceBundle.getBundle(contextRoot.getName(), Locale.getDefault(), contextRoot.getClassLoader());
-            ResourceBundleMessageSource applicationMessageSource = new ResourceBundleMessageSource();
+            getApplicationBundle(contextRoot); // Trigger the exception if not available
+            PlatformResourceBundleMessageSource applicationMessageSource = new PlatformResourceBundleMessageSource();
             applicationMessageSource.setBundleClassLoader(contextRoot.getClassLoader());
             applicationMessageSource.addBasenames(contextRoot.getName());
             applicationMessageSource.setParentMessageSource(rootMessageSource);
@@ -301,6 +292,22 @@ public class Spwing implements ApplicationContextAware  {
     }
 
 
+    private static ResourceBundle getApplicationBundle( final Class<?> contextRoot ) {
+        return PlatformResourceUtils.platformAndBaseNames(contextRoot.getName()).stream()
+                .map( name -> {
+                    try {
+                        return ResourceBundle.getBundle(name, Locale.getDefault(), contextRoot.getClassLoader());
+                    } catch (Exception e) {
+                        log.debug( "{} not found", name );
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+
     private Object resolveInvokerParameter(ParameterDescription parameterDescription) {
         Class<?> parameterTargetType = parameterDescription.getType();
         Object activeModel = documentScopeManager.getActiveModel();
@@ -343,14 +350,10 @@ public class Spwing implements ApplicationContextAware  {
     private static void performBootstrapConfiguration(ApplicationConfiguration applicationConfiguration) {
 
         // Find the look and feel to load
-
-        final ClassPathScanningCandidateComponentProvider provider = new ClassPathScanningCandidateComponentProvider(
-                false, new StandardEnvironment());
-        provider.addIncludeFilter(new AssignableTypeFilter(LookAndFeel.class));
-        provider.findCandidateComponents(applicationConfiguration.getContextRoot().getPackageName()).stream()
+        // TODO allow selectable LAF
+        ClassUtils.find(applicationConfiguration.getContextRoot(), LookAndFeel.class).stream()
                 .map(BeanDefinition::getBeanClassName)
                 .forEach(log::info);
-
 
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
             performMacOSSpecificBootstrapConfiguration(applicationConfiguration);
@@ -503,12 +506,11 @@ public class Spwing implements ApplicationContextAware  {
         convSet.add(new StringToFontConverter());
         convSet.add(new StringToColorConverter());
         convSet.add(new ImageToIconConverter());
-        convSet.add(new StringToImageConverter(applicationConfiguration.getContextRoot(), resourceUtils));
-        convSet.add(new StringToIconConverter(applicationConfiguration.getContextRoot(), resourceUtils));
+        convSet.add(new StringToImageConverter(applicationConfiguration.getContextRoot()));
+        convSet.add(new StringToIconConverter(applicationConfiguration.getContextRoot()));
         factory.setConverters(convSet);
         factory.afterPropertiesSet();
-        final ConversionService conversionService = factory.getObject();
-        return conversionService;
+        return factory.getObject();
     }
 
 
@@ -841,7 +843,7 @@ public class Spwing implements ApplicationContextAware  {
         // or model to provide the menu bar instead. Since those are
         // higher in the document component stack, they will take precedence.
         handlersReversed.stream()
-                .map(o -> MenuLoader.build(o, resourceUtils))
+                .map(o -> MenuLoader.build(o))
                 .filter(Objects::nonNull)
                 .findFirst()
                 .ifPresentOrElse(this::menuLoaderFound,

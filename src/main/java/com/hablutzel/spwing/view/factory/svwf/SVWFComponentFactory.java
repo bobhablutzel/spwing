@@ -15,17 +15,16 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind;
+package com.hablutzel.spwing.view.factory.svwf;
 
-public abstract class Accessor {
-
-    public abstract boolean isWriteable();
-
-    public abstract Object get(Class<?> targetClass);
-
-    public abstract void set(Object value);
-
-    public abstract boolean canSupply(Class<?> targetClass);
+import org.springframework.context.ApplicationContext;
 
 
+
+public interface SVWFComponentFactory {
+    default void addComponents(SVWFParseContext parseContext, ApplicationContext applicationContext) {
+        addComponents(parseContext);
+    }
+
+    void addComponents(SVWFParseContext parseContext);
 }

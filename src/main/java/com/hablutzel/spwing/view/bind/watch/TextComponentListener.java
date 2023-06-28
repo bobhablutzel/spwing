@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, Hablutzel Consulting, LLC.
+ * Copyright © 2023. Hablutzel Consulting, LLC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,10 +12,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package com.hablutzel.spwing.view.bind;
+package com.hablutzel.spwing.view.bind.watch;
 
+import com.hablutzel.spwing.view.bind.Accessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,14 +47,10 @@ class TextComponentListener implements DocumentListener {
     @Override
     public void changedUpdate(DocumentEvent e) {
         lastChange++;
-        log.info( "Changed updated" );
         SwingUtilities.invokeLater(() -> {
             if (lastNotifiedChange != lastChange) {
                 lastNotifiedChange = lastChange;
-                log.info( "Setting text to {}", textComponent.getText());
                 accessor.set(textComponent.getText());
-            } else {
-                log.info( "Rejected change" );
             }
         });
     }

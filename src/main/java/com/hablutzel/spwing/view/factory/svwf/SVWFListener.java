@@ -21,12 +21,10 @@ package com.hablutzel.spwing.view.factory.svwf;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.util.EnumerationStream;
-import com.hablutzel.spwing.util.FlexpressionParser;
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
 import com.hablutzel.spwing.view.adapter.JTextFieldEventAdapter;
 import com.hablutzel.spwing.view.bind.Accessor;
-import com.hablutzel.spwing.view.bind.ViewPropertyBinder;
 import com.hablutzel.spwing.view.factory.ComponentFactory;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +41,8 @@ import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -78,6 +78,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     @Getter
     private boolean cleanParse = true;
 
+    // TODO change layout processing
     private Container layoutContainer = null;
 
     /**
@@ -164,8 +165,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     public void enterInvokeStatement(SpwingViewFileParser.InvokeStatementContext ctx) {
         String methodName = ctx.methodName.getText();
 
-        final boolean isModel = tokenEquals("model", ctx.target);
-        final Object targetObject = isModel ? modelObject : controllerObject;
+        final Object targetObject = getRootClauseObject(ctx.root);
 
         // See if we can find that method on the target
         if (Objects.nonNull(targetObject)) {
@@ -174,8 +174,6 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                     SpwingViewFileParser.SvwfFileContext.class, () -> svwfFileContext,
                     SVWFParseContext.class, () -> parseContext
             ));
-        } else {
-            log.warn("{} object not found, invoke skipped", ctx.target.getText());
         }
     }
 
@@ -196,8 +194,8 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 return modelObject;
             } else if (Objects.nonNull(rootClauseContext.c)) {
                 return controllerObject;
-            } else if (Objects.nonNull(rootClauseContext.l)) {
-                final String beanName = stripStringLiteral(rootClauseContext.l);
+            } else if (Objects.nonNull(rootClauseContext.b)) {
+                final String beanName = rootClauseContext.b.getText();
                 try {
                     return applicationContext.getBean(beanName);
                 } catch (BeansException e) {
@@ -220,30 +218,35 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     }
 
 
-
-    // Perform the binding for a single object.
+    /**
+     * Bind a single Swing component to a model / controller property.
+     * This will <ul>
+     *     <li>Immediately set the value of the component based on the model</li>
+     *     <li>Set up an update of the control when events fire (if the trigger list is non-empty)</li>
+     *     <li>Set up a watcher on the component to update the model when the component
+     *     changes value (if the model property is writeable).</li>
+     * </ul>
+     * @param ctx The parse tree
+     * @param accessor The accessor for the model / controller property
+     * @param triggers The list of event triggers for an update of the control based on property changes.
+     */
     private void bindSingleObject( final SpwingViewFileParser.SingleTargetClauseContext ctx,
                                     final Accessor accessor,
                                     final List<String> triggers ) {
+
+        // Get the identifier and property. The identifier should
+        // reference a component created earlier by name - it is the
+        // name of the created component
         String identifier = ctx.target.getText();
         String property = ctx.property.getText();
 
-        // See if we know this identifier
+        // See if we know this identifier and make sure it's a Swing component
         Object viewObject = parseContext.getKnownComponents().get(identifier);
         if (viewObject instanceof Component component) {
 
-            BeanWrapper viewBeanWrapper = parseContext.getViewPropertyBinder().beanWrapperFor(viewObject);
-            if (viewBeanWrapper.isWritableProperty(property)) {
-                if ("name".equals(property)) {
-                    log.error( "\"name\" property is not eligible for binding");
-                    cleanParse = false;
-                } else {
-                    parseContext.getViewPropertyBinder().bind(component, property, accessor, triggers);
-                }
-            } else {
-                log.error("Cannot bind to property {}.{}", identifier, property);
-                cleanParse = false;
-            }
+            // Attempt to bind the property. We bind even if the parse is already
+            // invalid, but update based on the new parse.
+            cleanParse = parseContext.getViewPropertyBinder().bind( component, property, accessor, triggers) && cleanParse;
         } else {
             log.error("Component {} not found for, or is not a component", identifier);
             cleanParse = false;
@@ -271,6 +274,13 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     }
 
 
+    /**
+     * Bind a group of controls to a property of an object (generally a model/controller
+     * object).
+     * @param ctx The parse tree
+     * @param accessor The model/controller property accessor
+     * @param triggers The (possibly empty) list of triggers that signal a change to the property state
+     */
 
     private void bindGroup( final SpwingViewFileParser.GroupTargetClauseContext ctx,
                             final Accessor accessor,
@@ -279,30 +289,56 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // Get the property. This should be something shared across all the
         // components being referenced
         String targetProperty = ctx.property.getText();
+
+        // Get the name of the elements in the group.
         List<String> identifiedElements = ctx.identifierElement().stream()
                 .map(identifierCtx -> identifierCtx.element)
                 .map(Token::getText)
                 .toList();
 
-        // Now translate the identified elements to components
-        final List<Component> targetElements = new ArrayList<>();
-        identifiedElements.forEach( element -> {
-            if (parseContext.getKnownComponents().get(element) instanceof Component component) {
-                targetElements.add(component);
-            } else {
-                log.error("Unknown or invalid group component: {}", element);
-                cleanParse = false;
-            }
-        });
+        // Find any that are not within the known component map; if there
+        // are any log the problem and kill the parse
+        final Map<String, Object> knownComponents = parseContext.getKnownComponents();
+        List<String> invalidIdentifiers = identifiedElements.stream()
+                .filter(name -> !knownComponents.containsKey(name) ||
+                        !(knownComponents.get(name) instanceof Component))
+                .toList();
+        if (invalidIdentifiers.isEmpty()) {
 
-        // If they are all buttons, create a button group
-        if (targetElements.stream().allMatch(component -> component instanceof AbstractButton)) {
-            final List<AbstractButton> buttonList = targetElements.stream().map(component -> (AbstractButton) component).toList();
-            parseContext.getViewPropertyBinder().bindButtonGroup(buttonList, targetProperty, accessor, triggers );
+            // Now translate the identified elements to components
+            List<Object> targetElements = identifiedElements.stream()
+                    .map(knownComponents::get)
+                    .toList();
+
+            // See if the group was named. If so, and all elements are components, save this target element list
+            if (Objects.nonNull(ctx.groupName)) {
+
+                boolean allComponents = targetElements.stream().allMatch(c -> c instanceof Component);
+                if (allComponents) {
+                    String groupName = ctx.groupName.getText();
+                    knownComponents.put(groupName, new Group(targetElements.stream().map(c -> (Component)c).toList()));
+                } else {
+                    log.warn("Did not create named group for group that was not all descended from Component" );
+                }
+
+            }
+
+            // Bind that group
+            parseContext.getViewPropertyBinder().bindGroup( targetElements, targetProperty, accessor, triggers );
+
+        } else {
+            log.error("Elements {} were not found for the group.", invalidIdentifiers);
+            cleanParse = false;
         }
     }
 
 
+    /**
+     * Handle a "bind" statement, which binds a component to a property
+     * of the model (or controller).
+     *
+     * @param ctx the parse tree
+     */
     @Override
     public void enterBindStatement( final SpwingViewFileParser.BindStatementContext ctx) {
 
@@ -314,17 +350,30 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
         // Get the property accessor for this element
         Accessor accessor = parseContext.getViewPropertyBinder().toAccessor(rootObject, expression);
+        if (Objects.nonNull(accessor)) {
 
-        // See if we have a group or single binding statement
-        if (Objects.nonNull(ctx.target.single)) {
-            bindSingleObject( ctx.target.single, accessor, triggers );
+            // See if we have a group or single binding statement
+            if (Objects.nonNull(ctx.target.single)) {
+                bindSingleObject(ctx.target.single, accessor, triggers);
+            } else {
+                bindGroup(ctx.target.group, accessor, triggers);
+            }
         } else {
-            bindGroup( ctx.target.group, accessor, triggers );
+            this.cleanParse = false;
         }
 
     }
 
-    private boolean tokenEquals(String value, Token token) {
+
+    /**
+     * Helper routine to check the value of a token against a known
+     * value; returns true if the token is non-null and text matches.
+     *
+     * @param value The value to check against
+     * @param token The token
+     * @return TRUE if the token is non-null and textually matches
+     */
+    private boolean tokenEquals(@NonNull final String value, @Nullable final Token token) {
         return Objects.nonNull(token) && value.equals(token.getText());
     }
 
@@ -335,31 +384,19 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             SVWFParseContext.ElementDefinition elementDefinition = parseContext.getDefinitionMap().get(classAlias);
             Class<?> targetClass = elementDefinition.elementClass();
 
-            Map<String, Object> defaultMap = new HashMap<>();
+            final Map<String, Object> defaultMap = new HashMap<>();
             parseContext.getDefaultValues().put(targetClass, defaultMap);
-            // Create a dummy instance so we can get the right property types
-            ctx.kvPair().forEach(kvPairContext -> handleKVPairForDefault(kvPairContext, targetClass, defaultMap));
+
+            // For each defined default, remember the values
+            ctx.kvPair().forEach(kvPairContext -> {
+                final String propertyName = kvPairContext.k.getText();
+                final DeclaredValue declaredValue = new DeclaredValue(kvPairContext.v);
+
+                defaultMap.put(propertyName, declaredValue.get());
+            });
         }
     }
 
-    private void handleKVPairForDefault(final SpwingViewFileParser.KvPairContext kvPairContext,
-                                        final Class<?> targetClass,
-                                        final Map<String, Object> defaultMap) {
-        final String propertyName = kvPairContext.k.getText();
-        final DeclaredValue declaredValue = new DeclaredValue(kvPairContext.v);
-
-        defaultMap.put(propertyName, declaredValue.getValue(getPropertyTypeFromClass(targetClass, propertyName)));
-    }
-
-    private Class<?> getPropertyTypeFromClass(Class<?> targetClass, String propertyName) {
-        String potentialMethodName = "set" + propertyName.substring(0, 1).toUpperCase() + propertyName.substring(1);
-        return Arrays.stream(targetClass.getMethods())
-                .filter(method -> method.getName().equals(potentialMethodName) &&
-                        method.getParameterCount() == 1)
-                .map(method -> method.getParameterTypes()[0])
-                .findFirst()
-                .orElse(null);
-    }
 
     @Override
     public void enterColorStatement(SpwingViewFileParser.ColorStatementContext ctx) {
@@ -418,20 +455,21 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         String imageName = ctx.name.getText();
         if (Objects.nonNull(ctx.imageSpec().resourceName)) {
             String resourceName = stripStringLiteral(ctx.imageSpec().resourceName);
-            Object target = (Objects.nonNull(ctx.imageSpec().target) && "controller".equals(ctx.imageSpec().target.getText()))
-                    ? controllerObject
-                    : modelObject;
+            Object target = getRootClauseObject(ctx.imageSpec().root);
+            if (Objects.nonNull(target)) {
 
-            ResourceUtils resourceUtils = applicationContext.getBean(ResourceUtils.class);
+                String baseName = FilenameUtils.getBaseName(resourceName);
+                String extension = FilenameUtils.getExtension(resourceName);
 
-            String baseName = FilenameUtils.getBaseName(resourceName);
-            String extension = FilenameUtils.getExtension(resourceName);
-
-            try (InputStream in = resourceUtils.getPlatformResource(target.getClass(), baseName, extension)) {
-                BufferedImage image = ImageIO.read(in);
-                parseContext.getKnownComponents().put(imageName, image);
-            } catch (Exception e) {
-                log.warn("Unable to read resource file for image {}", resourceName, e);
+                try (InputStream in = PlatformResourceUtils.getPlatformResource(target.getClass(), baseName, extension)) {
+                    BufferedImage image = ImageIO.read(in);
+                    parseContext.addComponent(imageName, image);
+                } catch (Exception e) {
+                    log.warn("Unable to read resource file for image {}", resourceName, e);
+                }
+            } else {
+                log.error("Can't get image from non-existent place");
+                cleanParse = false;
             }
         } else {
             String urlName = stripStringLiteral(ctx.imageSpec().url);
@@ -445,24 +483,49 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         super.enterImageStatement(ctx);
     }
 
+
+    /**
+     * Handle the "component" statement, which defines a single
+     * component. The component will have a name, a class (given by
+     * alias), and a set of property values.
+     * @param ctx the parse tree
+     */
+
     @Override
     public void enterComponentStatement(SpwingViewFileParser.ComponentStatementContext ctx) {
+
+        // Get the name and the class alias
         final String componentName = ctx.componentName.getText();
         final String classAlias = ctx.classAlias.getText();
+
+        // If we already have a component with this name, we ignore this
+        // definition.
         if (parseContext.getKnownComponents().containsKey(componentName)) {
             log.warn("In SWVF file, {} is already defined. Additional definition ignored", componentName);
         } else {
+
+            // Get the definition of the element based on the alias. This will give
+            // us the function for creating the new alias
             SVWFParseContext.ElementDefinition elementDefinition = parseContext.getDefinitionMap().get(classAlias);
             if (Objects.nonNull(elementDefinition)) {
+
+                // We have the alias, create the instance and get a class for what we just defined.
                 final Function<String, Object> creationFunction = elementDefinition.createFunction();
                 final Object createdElement = creationFunction.apply(componentName);
                 final Class<?> definedObjectType = createdElement.getClass();
+
+                // Add this new component to the list
                 parseContext.getKnownComponents().put(componentName, createdElement);
 
-                BeanWrapper activeComponent = new BeanWrapperImpl(createdElement);
-                activeComponent.setConversionService(conversionService);
+                // Set the initial "value" of the component to the name. This can be
+                // changed by specifying a "value" property, which will be intercepted and
+                // interpreted as a new value
+                parseContext.getViewPropertyBinder().setValue(createdElement, componentName);
 
-                registerAdapter(componentName, createdElement);
+                // In order to set properties of this component, we create a bean
+                // wrapper and set the conversion service
+                BeanWrapper activeComponent = parseContext.getViewPropertyBinder().beanWrapperFor(createdElement);
+                activeComponent.setConversionService(conversionService);
 
                 // Apply defaults for any class that is in the target class hierarchy
                 parseContext.getDefaultValues().forEach((clazz, defaults) -> {
@@ -471,6 +534,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                     }
                 });
 
+                // Walk through all the key/value pairs for this component.
                 ctx.kvPair().forEach(kvPairContext -> {
                     handleKVPairForComponent(activeComponent, kvPairContext);
                 });
@@ -481,16 +545,39 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         }
     }
 
+
+    /**
+     * Called to handle a single key/value pair when creating a component.
+     *
+     * @param activeComponent The component being created
+     * @param kvPairContext The KV pair to process
+     */
     private void handleKVPairForComponent(BeanWrapper activeComponent, SpwingViewFileParser.KvPairContext kvPairContext) {
+
+        // Get the property name and declared value.
         final String propertyName = kvPairContext.k.getText();
         final DeclaredValue declaredValue = new DeclaredValue(kvPairContext.v);
 
-        // Special case the "value" property - we track that internally
+        // Special case the "value" property - we track that internally.
+        // TODO special case CSS stylesheet and style clauses
         if ("value".equals(propertyName)) {
-            parseContext.getValueMap().put(activeComponent.getWrappedInstance(), declaredValue::getValue);
+            parseContext.getViewPropertyBinder().setValue(activeComponent.getWrappedInstance(), declaredValue.get());
         } else {
+
+            // Get the property type for this component, based on the name given
             final Class<?> propertyType = activeComponent.getPropertyType(propertyName);
-            activeComponent.setPropertyValue(propertyName, declaredValue.getValue(propertyType));
+            if (Objects.nonNull(propertyType)) {
+
+                // Push the value to the component.
+                final Object unconvertedValue = declaredValue.get();
+                final Object convertedValue = conversionService.convert(unconvertedValue, propertyType);
+                activeComponent.setPropertyValue(propertyName, convertedValue);
+            } else {
+
+                // Bad property name given. Kill the parse.
+                log.error("Unable to set property {} of unknown type", propertyName);
+                cleanParse = false;
+            }
         }
     }
 
@@ -500,26 +587,18 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
         private final SpwingViewFileParser.PairValueContext valueContext;
 
-        public Object getValue(Class<?> expectedType) {
+        public Object get() {
             if (Objects.nonNull(valueContext.bool)) {
-                return conversionService.convert(valueContext.bool.getText().equals("true"), expectedType);
+                return valueContext.bool.getText().equals("true");
             } else if (Objects.nonNull(valueContext.string)) {
-                return conversionService.convert(stripStringLiteral(valueContext.string), expectedType);
+                return stripStringLiteral(valueContext.string);
             } else if (Objects.nonNull(valueContext.size)) {
                 return parseDimension(valueContext.size);
             } else if (Objects.nonNull(valueContext.id)) {
-                return conversionService.convert(parseContext.getKnownComponents().get(valueContext.id.getText()), expectedType);
+                return parseContext.getKnownComponents().get(valueContext.id.getText());
             } else {
-                return conversionService.convert(getIntValue(valueContext.integer), expectedType);
+                return getIntValue(valueContext.integer);
             }
-        }
-    }
-
-    private void registerAdapter(final String componentName, final Object component) {
-        if (component instanceof JLabel label) {
-            documentEventDispatcher.registerEventAdapter(componentName, new JLabelEventAdapter(label));
-        } else if (component instanceof JTextField textField) {
-            documentEventDispatcher.registerEventAdapter(componentName, new JTextFieldEventAdapter(textField));
         }
     }
 
@@ -557,34 +636,16 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         final Object element = getNamedElement(token);
         if (element instanceof Component component) {
             consumer.accept(component);
-        } else if (element instanceof ButtonGroup buttonGroup) {
+        } else if (element instanceof Group group) {
             if (wrapButtonGroup) {
                 JPanel panel = parseContext.getComponentFactory().newJPanel("_anon_" + token.getText());
-                EnumerationStream.stream(buttonGroup.getElements()).forEach(panel::add);
+                group.components.forEach(panel::add);
                 consumer.accept(panel);
             } else {
-                EnumerationStream.stream(buttonGroup.getElements()).forEach(consumer);
+                group.components.forEach(consumer);
             }
         } else {
             log.warn("Could not find element {} as a component or group", token.getText());
-        }
-    }
-
-    @Override
-    public void enterGroupStatement(SpwingViewFileParser.GroupStatementContext ctx) {
-        String groupName = ctx.groupName.getText();
-        ComponentFactory componentFactory = parseContext.getComponentFactory();
-        Map<String, Object> knownComponents = parseContext.getKnownComponents();
-        ButtonGroup buttonGroup = componentFactory.newButtonGroup(groupName);
-
-        for (SpwingViewFileParser.IdentifierElementContext identifierElementContext : ctx.identifierElement()) {
-            String elementName = identifierElementContext.element.getText();
-            if (knownComponents.containsKey(elementName) &&
-                    knownComponents.get(elementName) instanceof AbstractButton button) {
-                buttonGroup.add(button);
-            } else {
-                log.error("{} is not present or not a button", elementName);
-            }
         }
     }
 
@@ -611,7 +672,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
             ctx.boxElement().forEach(boxElementContext -> {
 
-                if (Objects.nonNull(boxElementContext.identifierElement().element)) {
+                if (Objects.nonNull(boxElementContext.identifierElement())) {
                     onNamedComponent(boxElementContext.identifierElement().element, layoutContainer::add, false);
                 } else if (Objects.nonNull(boxElementContext.horizontalGlue)) {
                     layoutContainer.add(Box.createHorizontalGlue());
@@ -716,4 +777,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 .orElse(null);
     }
 
+
+
+    private record Group(List<Component> components){}
 }

@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.annotations.Handler;
 import com.hablutzel.spwing.annotations.MenuSource;
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -86,11 +86,6 @@ public class MenuLoader {
     private final String menuName;
 
     /**
-     * The resource util instance
-     */
-    private final ResourceUtils resourceUtils;
-
-    /**
      * The command IDs that come from this loader
      */
     @Getter
@@ -116,7 +111,7 @@ public class MenuLoader {
      * @param documentComponent The document component instance
      * @return The MenuLoader, or null if it could not be built
      */
-    public static MenuLoader build(final Object documentComponent, final ResourceUtils resourceUtils) {
+    public static MenuLoader build(final Object documentComponent) {
 
         // See if the object has a menu source annotation. If not,
         // return null. Check to see if the user passed in a class
@@ -132,7 +127,7 @@ public class MenuLoader {
             String menuName = menuSource.menuName().isBlank()
                     ? menuSourceClassName
                     : menuSource.menuName();
-            return new MenuLoader(documentComponentClass, menuName, resourceUtils);
+            return new MenuLoader(documentComponentClass, menuName);
         } else {
             return null;
         }
@@ -153,7 +148,7 @@ public class MenuLoader {
         // Load the JSON representation of the menu. If this cannot
         // be loaded, then the menu cannot be rebuilt and will
         // be left untouched from the preview state.
-        try(InputStream in=resourceUtils.getPlatformResource(menuSourceClass, menuName, "json" )) {
+        try(InputStream in= PlatformResourceUtils.getPlatformResource(menuSourceClass, menuName, "json" )) {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode rootNode = mapper.readValue(in, JsonNode.class);
 

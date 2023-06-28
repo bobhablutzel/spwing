@@ -17,6 +17,8 @@
 package com.hablutzel.spwing.annotations;
 
 
+import com.hablutzel.spwing.util.PlatformResourceUtils;
+
 import java.lang.annotation.*;
 
 @Documented
@@ -26,7 +28,7 @@ public @interface MenuSource {
 
     /**
      * The base name for the menu JSON file. This name will be
-     * loaded with platform-specific semantic, see {@link com.hablutzel.spwing.util.ResourceUtils}
+     * loaded with platform-specific semantic, see {@link PlatformResourceUtils}
      * for more information. It should not include the ".json" extension, that
      * will be supplied by the framework.
      * 

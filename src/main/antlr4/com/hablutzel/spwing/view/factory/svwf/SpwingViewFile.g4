@@ -65,14 +65,9 @@ options {
 
 
 /**
- * Primary entry point for the grammar. SpwingViewFiles have
- * three clauses:
- *    - A Component clause, which defines the components
- *      in the controller
- *    - A Layout clause, which organizes the components
- *      visually
- *    - A Bindings clause, which assocates each component
- *      with properties and events from the model
+ * Primary entry point for the grammar. See the
+ * README_SVWF.md file for more information about SVWF
+ * files
  */
 svwfFile : statement+;
 
@@ -88,7 +83,6 @@ statement
     |   imageClause
     |   invokeStatement
     |   layoutClause
-    |   groupsClause
     ;
 
 
@@ -116,12 +110,8 @@ imageClause
     :   'images' OBRACE imageStatement (SEMI imageStatement)* SEMI? CBRACE
     ;
 
-groupsClause
-    :   'groups' OBRACE groupStatement (SEMI groupStatement)* SEMI? CBRACE
-    ;
-
 invokeStatement
-    :   'invoke' methodName=Identifier ('on' target=('controller'|'model'))? SEMI
+    :   'invoke' methodName=Identifier (root=rootClause)? SEMI
     ;
 
 componentStatement
@@ -158,14 +148,14 @@ singleTargetClause
     ;
 
 groupTargetClause
-    :   OBRACE identifierElement (COMMA identifierElement)+ CBRACE DOT property=Identifier
+    :   (groupName=Identifier COLON)? OBRACE identifierElement (COMMA identifierElement)+ CBRACE DOT property=Identifier
     ;
 
 rootClause
     :   OPAREN
         (   m='model'
         |   c='controller'
-        |   l=String_Literal
+        |   b=Identifier
         )? CPAREN
     ;
 
@@ -203,7 +193,7 @@ imageStatement
     ;
 
 imageSpec
-    :    resourceName=String_Literal ( OPAREN target=('model'|'controller') CPAREN)?
+    :    resourceName=String_Literal (root=rootClause)?
     |   'url' url=String_Literal
     ;
 
@@ -216,10 +206,6 @@ layoutStatement
             (   borderLayoutDescription
             |   boxLayoutDescription
             |   flowLayoutDescription )
-    ;
-
-groupStatement
-    :   groupName=Identifier COLON identifierElement (COMMA identifierElement)*
     ;
 
 flowLayoutDescription

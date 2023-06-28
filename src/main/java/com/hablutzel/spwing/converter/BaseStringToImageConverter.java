@@ -17,10 +17,11 @@
 
 package com.hablutzel.spwing.converter;
 
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
+import org.springframework.lang.NonNull;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -36,7 +37,6 @@ import java.util.Objects;
 public class BaseStringToImageConverter {
     private static final BufferedImage deadImage;
     private final Class<?> contextRoot;
-    private final ResourceUtils resourceUtils;
 
     static {
         deadImage = new BufferedImage( 64, 64, BufferedImage.TYPE_INT_RGB );
@@ -50,11 +50,11 @@ public class BaseStringToImageConverter {
         g.drawLine(0, 64, 64, 0 );
     }
 
-    protected BufferedImage getimage(String imageName) {
+    protected BufferedImage getImage(@NonNull String imageName) {
         // See if the image is available as a resource
         String baseName = FilenameUtils.getBaseName(imageName);
         String extension = FilenameUtils.getExtension(imageName);
-        try (InputStream in = resourceUtils.getPlatformResource(contextRoot, baseName, extension)) {
+        try (InputStream in = PlatformResourceUtils.getPlatformResource(contextRoot, baseName, extension)) {
             if (Objects.nonNull(in)) {
                 return ImageIO.read(in);
             }

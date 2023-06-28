@@ -15,17 +15,17 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind;
+package com.hablutzel.spwing.view.factory.svwf;
 
-public abstract class Accessor {
-
-    public abstract boolean isWriteable();
-
-    public abstract Object get(Class<?> targetClass);
-
-    public abstract void set(Object value);
-
-    public abstract boolean canSupply(Class<?> targetClass);
+import com.hablutzel.spwing.util.Colors;
+import org.springframework.stereotype.Service;
 
 
+@Service
+public class SVWFColorFactory implements SVWFComponentFactory {
+
+    @Override
+    public void addComponents(SVWFParseContext parseContext) {
+        Colors.htmlColors.forEach(parseContext::addComponent);
+    }
 }

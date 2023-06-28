@@ -39,18 +39,15 @@ import java.util.function.Function;
 
 @Slf4j
 public class SVWFViewFactory {
-    private final Map<String, Function<String,Object>> definitionMap = new HashMap<>();
-    private final Map<String, Object> predefinedComponents = new HashMap<>();
 
     /**
-     * The {@link #fromStream(Object, Object, ApplicationContext, DocumentEventDispatcher, InputStream)}
+     * The {@link #fromStream(Object, Object, ApplicationContext, InputStream)}
      * method creates a set of Swing components as described by the SVWF file accessed by the given
      * input stream.
      *
      * @param model                   The model associated with the view
      * @param controller              The controller associated with the view
      * @param applicationContext      The application context
-     * @param documentEventDispatcher The document event dispatcher
      * @param viewDescriptionFile     The input stream containing the SVWF file
      * @return A new root component for the view
      * @throws IOException If the stream cannot be read
@@ -58,17 +55,16 @@ public class SVWFViewFactory {
     public Component fromStream(final @Model Object model,
                                 final @Controller Object controller,
                                 final ApplicationContext applicationContext,
-                                final DocumentEventDispatcher documentEventDispatcher,
                                 final InputStream viewDescriptionFile) throws IOException {
 
         if (Objects.nonNull(viewDescriptionFile)) {
 
-
-            // Get the conversion service
+            // Get the conversion service and document event dispatcher
+            final DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
             final ConversionService conversionService = applicationContext.getBean(ConversionService.class);
 
             // Create a component map for this parse, and include all the predefined components.
-            SVWFParseContext svwfParseContext = new SVWFParseContext(model, controller, applicationContext, documentEventDispatcher, conversionService);
+            SVWFParseContext svwfParseContext = new SVWFParseContext(model, controller, applicationContext, documentEventDispatcher);
 
             // Create a listener for the parse tree. This will control the actual logic
             // for taking the actions implied by the parse tree

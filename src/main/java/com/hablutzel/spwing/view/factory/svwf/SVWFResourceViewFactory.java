@@ -18,8 +18,7 @@ package com.hablutzel.spwing.view.factory.svwf;
 
 import com.hablutzel.spwing.annotations.Controller;
 import com.hablutzel.spwing.annotations.Model;
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.util.ResourceUtils;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
@@ -66,15 +65,13 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
      *     controller class simple name but replacing the trailing "Controller" with "View" in the
      *     resource directory for the controller class.</li>
      * </ul>
-     * In all cases, the resource is search using platform awareness, see {@link ResourceUtils#getPlatformResource(Class, String)}
+     * In all cases, the resource is search using platform awareness, see {@link PlatformResourceUtils#getPlatformResource(Class, String, String)}
      * and will have the extension ".svwf"
      *
      */
     public Component build(final @Model Object model,
                            final @Controller Object controller,
-                           final ApplicationContext applicationContext,
-                           final ResourceUtils resourceUtils,
-                           final DocumentEventDispatcher documentEventDispatcher) {
+                           final ApplicationContext applicationContext) {
 
         final List<Supplier<InputStream>> nameMappers = new ArrayList<>();
 
@@ -87,9 +84,9 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
                     : "";
 
             log.debug( "Adding check for resource {}", modelClassName);
-            nameMappers.add(() -> resourceUtils.getPlatformResource(modelClass, modelClassName, "svwf"));
+            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelClassName, "svwf"));
             log.debug( "Adding check for resource {}", modelNameToViewName);
-            nameMappers.add(() -> resourceUtils.getPlatformResource(modelClass, modelNameToViewName, "svwf"));
+            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelNameToViewName, "svwf"));
         }
 
         // Same approach with the controller. Make sure we have one
@@ -101,9 +98,9 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
                     : "";
 
             log.debug( "Adding check for resource {}", controllerClassName);
-            nameMappers.add(() -> resourceUtils.getPlatformResource(controllerClass, controllerClassName, "svwf"));
+            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(controllerClass, controllerClassName, "svwf"));
             log.debug( "Adding check for resource {}", controllerNameToViewName);
-            nameMappers.add(() -> resourceUtils.getPlatformResource(controllerClass, controllerNameToViewName, "svwf"));
+            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(controllerClass, controllerNameToViewName, "svwf"));
 
         }
 
@@ -113,7 +110,7 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
                 .findFirst()
                 .orElse(null)) {
 
-            return fromStream(model, controller, applicationContext, documentEventDispatcher, swvfStream);
+            return fromStream(model, controller, applicationContext, swvfStream);
         } catch (IOException e) {
             log.error("Error reading SVWF file", e);
             throw new RuntimeException("Error reading SVWF file", e);
