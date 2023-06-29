@@ -249,8 +249,9 @@ public final class BuiltInCommands implements MessageSourceAware {
      * Used to denote a menu item with no action
      */
     @HandlerFor("cmdNOP")
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"unused"})
     public void noActionHandler(ActionEvent event) {
+        log.debug("This method intentionally left blank");
     }
 
 

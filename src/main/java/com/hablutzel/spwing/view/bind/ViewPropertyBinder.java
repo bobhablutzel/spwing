@@ -17,11 +17,9 @@
 
 package com.hablutzel.spwing.view.bind;
 
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.util.FlexpressionParser;
 import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
 import com.hablutzel.spwing.view.bind.watch.GenericPropertyBinder;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -30,7 +28,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ParseException;
-import org.springframework.expression.spel.SpelParseException;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.lang.NonNull;
@@ -38,8 +35,8 @@ import org.springframework.lang.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -47,7 +44,6 @@ import java.util.stream.Collectors;
 public class ViewPropertyBinder {
 
     private final ApplicationContext applicationContext;
-    private final DocumentEventDispatcher documentEventDispatcher;
     private final ConversionService conversionService;
 
     private final Map<Object, Object> valueMap = new HashMap<>();
@@ -66,7 +62,6 @@ public class ViewPropertyBinder {
      */
     public ViewPropertyBinder(final ApplicationContext applicationContext ) {
         this.applicationContext = applicationContext;
-        this.documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
         this.conversionService = applicationContext.getBean(ConversionService.class);
 
         // Get all the binder services, and add the (non-service) last chance binder
@@ -196,7 +191,6 @@ public class ViewPropertyBinder {
      * @param triggers                A list of triggers for updating the property by re-evaluating the expression
      * @return TRUE if the bind was successful
      */
-    @SuppressWarnings("unchecked")
     public boolean bind(final Object viewObject,
                         final String viewObjectProperty,
                         final Accessor authoritativeValue,
@@ -232,7 +226,6 @@ public class ViewPropertyBinder {
      * @param triggers                A list of triggers for updating the property by re-evaluating the expression
      * @return TRUE if the bind was successful
      */
-    @SuppressWarnings("unchecked")
     public boolean bind(@NonNull final Object viewObject,
                         @NonNull final String viewObjectProperty,
                         @NonNull final Object viewObjectValue,

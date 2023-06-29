@@ -18,23 +18,11 @@
 package com.hablutzel.spwing.view.bind.controllers;
 
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 
-@RequiredArgsConstructor
 @Slf4j
-public class ButtonGroupController {
+public record ButtonGroupController(ButtonGroup buttonGroup) {
 
-    @Getter
-    private final ButtonGroup buttonGroup;
-
-    public AbstractButton getSelected() {
-        return null;
-    }
-
-    public void setSelected(AbstractButton button) {
-    }
 }

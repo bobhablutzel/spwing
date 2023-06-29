@@ -32,9 +32,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +41,7 @@ import java.util.Objects;
 @Service
 @Slf4j
 public class ButtonGroupSelectedBinder implements Binder {
-    private enum BindingTo { Enum, Boolean, String };
+    private enum BindingTo { Enum, Boolean, String }
 
     private BindingTo bindingTo = BindingTo.Enum;
 
@@ -53,7 +50,7 @@ public class ButtonGroupSelectedBinder implements Binder {
                          @NonNull final String propertyName,
                          @NonNull final Accessor authoritativeValueAccessor) {
         if (componentWrapper.getWrappedInstance() instanceof ButtonGroupController buttonGroupController) {
-            ButtonGroup buttonGroup = buttonGroupController.getButtonGroup();
+            ButtonGroup buttonGroup = buttonGroupController.buttonGroup();
             if ("selected".equals(propertyName)) {
                 if (authoritativeValueAccessor.canSupply(Enum.class)) {
                     bindingTo = BindingTo.Enum;
@@ -83,7 +80,7 @@ public class ButtonGroupSelectedBinder implements Binder {
 
         ConversionService conversionService = applicationContext.getBean(ConversionService.class);
         if (wrappedTargetObject.getWrappedInstance() instanceof ButtonGroupController buttonGroupController) {
-            ButtonGroup buttonGroup = buttonGroupController.getButtonGroup();
+            ButtonGroup buttonGroup = buttonGroupController.buttonGroup();
 
             // Set the initial value of the button group
             setComponentValue(targetObjectValue, authoritativeValueAccessor, conversionService, buttonGroup);

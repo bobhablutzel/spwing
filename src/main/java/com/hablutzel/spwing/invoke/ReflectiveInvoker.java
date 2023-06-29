@@ -17,8 +17,6 @@
 package com.hablutzel.spwing.invoke;
 
 
-import com.hablutzel.spwing.ApplicationConfiguration;
-import com.hablutzel.spwing.annotations.Application;
 import com.hablutzel.spwing.util.ResultHolder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -32,8 +30,9 @@ import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.annotation.SynthesizingMethodParameter;
 
 import java.lang.reflect.*;
-import java.util.*;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 
@@ -230,8 +229,7 @@ public class ReflectiveInvoker extends Invoker {
 
     private ParameterDescription wrapParameter(final SynthesizingMethodParameter parameter ) {
 
-        final ReflectiveParameterDescription reflectiveParameterDescription = new ReflectiveParameterDescription(parameter, getContext(), executable);
-        return reflectiveParameterDescription;
+        return new ReflectiveParameterDescription(parameter, getContext(), executable);
     }
 
     @Override
