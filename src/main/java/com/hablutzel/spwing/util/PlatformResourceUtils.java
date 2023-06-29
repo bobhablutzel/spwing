@@ -7,32 +7,100 @@ import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 @RequiredArgsConstructor
 @Slf4j
 public class PlatformResourceUtils {
 
+
+    public record OSInfo( String name, String major, String minor ) {}
+
     public static final String OS_NAME;
-    public static final String OS_FULL_VERSION;
     public static final String OS_MAJOR_VERSION;
 
+    public static final String OS_MINOR_VERSION;
+
     static {
-        OS_NAME = SystemUtils.OS_NAME.replaceAll("\\s", "" );
-        final String osVersion = SystemUtils.OS_VERSION;
-        OS_FULL_VERSION = osVersion.replaceAll("[.]", "_" );
-        final int majorSeparatorIndex = osVersion.indexOf('.');
-            OS_MAJOR_VERSION = majorSeparatorIndex != -1
-                    ? osVersion.substring(0, majorSeparatorIndex - 1)
-                    : null;
+        OSInfo osInfo = getOSInfo();
+        OS_NAME = osInfo.name;
+        OS_MAJOR_VERSION = osInfo.major;
+        OS_MINOR_VERSION = osInfo.minor;
     }
 
 
+    /**
+     * Get better granularity information than the {@link SystemUtils}
+     * class does.
+     *
+     * @return Information about the OS name and version
+     */
+    public static OSInfo getOSInfo() {
+        if (SystemUtils.IS_OS_WINDOWS) {
+            return windowInfo();
+        } else {
+            return getDefaultOSInfo();
+        }
+    }
+
+    private static OSInfo getDefaultOSInfo() {
+        Pattern majorMinor = Pattern.compile("(\\d)+\\.(\\d+)");
+        Matcher matcher = majorMinor.matcher(SystemUtils.OS_VERSION);
+        if (matcher.find()) {
+            return new OSInfo(SystemUtils.OS_NAME, matcher.group(1), matcher.group(2));
+        } else {
+            return new OSInfo(SystemUtils.OS_NAME, SystemUtils.OS_VERSION, "");
+        }
+    }
+
+
+    /**
+     * Windows doesn't do a great job of reporting
+     * the version, especially for Windows 11. In order
+     * to get the actual OS version, we use a command line
+     * to get the version, and get the OS version from that.
+     * @return The system info
+     */
+    private static OSInfo windowInfo() {
+        try {
+            Runtime runtime = Runtime.getRuntime();
+            Process process = runtime.exec(new String[] { "cmd.exe", "/c", "ver" });
+            try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                StringBuilder stringBuilder = new StringBuilder();
+                String stdOutLine;
+                while ((stdOutLine = bufferedReader.readLine()) != null) {
+                    stringBuilder.append(stdOutLine);
+                }
+                Pattern versionPattern = Pattern.compile("\\[Version (\\d+)\\.\\d+\\.(\\d+).(\\d+)]");
+                Matcher matcher = versionPattern.matcher(stringBuilder);
+                if (matcher.find()) {
+                    int minorVersion = Integer.parseInt(matcher.group(2));
+                    String version = "10".equals(matcher.group(1)) && minorVersion > 22000
+                            ? "11"
+                            : matcher.group(1);
+                    return new OSInfo(SystemUtils.OS_NAME, version, matcher.group(2));
+
+                } else {
+                    return getDefaultOSInfo();
+                }
+            } catch (IOException e) {
+                return getDefaultOSInfo();
+            }
+        } catch (IOException ex) {
+            return getDefaultOSInfo();
+        }
+    }
+
     public static String withPlatformAndFullVersion(String baseName ) {
-        return String.format("%s_%s_%s", baseName, OS_NAME, OS_FULL_VERSION);
+        return String.format("%s_%s_%s_%s", baseName, OS_NAME, OS_MAJOR_VERSION, OS_MINOR_VERSION);
     }
     public static String withPlatformAndMajorVersion(String baseName ) {
         return String.format("%s_%s_%s", baseName, OS_NAME, OS_MAJOR_VERSION);

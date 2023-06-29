@@ -23,6 +23,9 @@ import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeansException;
 import org.springframework.lang.NonNull;
 
+import javax.swing.*;
+import java.util.Objects;
+
 
 /**
  * "Last chance" binder. Binds to the given property but
@@ -44,6 +47,18 @@ public class GenericPropertyBinder extends BaseBinder {
             log.info( "{} cannot be handled (not a writeable property", propertyName );
             return false;
         }
-
     }
+
+    protected void checkForSuspiciousConditions(@NonNull final BeanWrapper wrappedTargetObject,
+                                                @NonNull final String propertyName,
+                                                @NonNull final Accessor authoritativeValueAccessor) {
+
+        if (wrappedTargetObject.getWrappedInstance() instanceof JLabel &&
+            "text".equals(propertyName)) {
+            if (Objects.isNull(authoritativeValueAccessor.get(Object.class))) {
+                log.warn( "Mapping JLabel text value to a null value" );
+            }
+        }
+    }
+
 }

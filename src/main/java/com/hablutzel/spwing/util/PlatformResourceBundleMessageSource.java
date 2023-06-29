@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.lang.NonNull;
 
+import java.util.Enumeration;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
@@ -32,13 +33,33 @@ public class PlatformResourceBundleMessageSource extends ResourceBundleMessageSo
     @Override
     @NonNull
     protected ResourceBundle doGetBundle(@NonNull final String basename, @NonNull final Locale locale) throws MissingResourceException {
-        for (String platformBaseName: PlatformResourceUtils.platformNames(basename)) {
+        for (String platformBaseName: PlatformResourceUtils.platformAndBaseNames(basename)) {
             try {
                 return super.doGetBundle(platformBaseName, locale);
             } catch (MissingResourceException e) {
                 log.debug( "{} was not found", platformBaseName );
             }
         }
-        return super.doGetBundle(basename, locale);
+        return new ResourceBundle() {
+            @Override
+            protected Object handleGetObject(String key) {
+                return key;
+            }
+
+            @Override
+            public Enumeration<String> getKeys() {
+                return new Enumeration<>() {
+                    @Override
+                    public boolean hasMoreElements() {
+                        return false;
+                    }
+
+                    @Override
+                    public String nextElement() {
+                        return null;
+                    }
+                };
+            }
+        };
     }
 }
