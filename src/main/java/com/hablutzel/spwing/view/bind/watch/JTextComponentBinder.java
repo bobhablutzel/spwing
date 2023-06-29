@@ -52,7 +52,8 @@ public class JTextComponentBinder extends BaseBinder {
     public boolean binds(@NonNull final BeanWrapper componentWrapper,
                          @NonNull final String propertyName,
                          @NonNull final Accessor authoritativeValueAccessor) {
-        return JTextComponent.class.isAssignableFrom(componentWrapper.getWrappedInstance().getClass());
+        return JTextComponent.class.isAssignableFrom(componentWrapper.getWrappedInstance().getClass()) &&
+                "text".equals(propertyName);
     }
 
     @Override
@@ -63,6 +64,7 @@ public class JTextComponentBinder extends BaseBinder {
                      @NonNull final List<String> triggers,
                      @NonNull final ApplicationContext applicationContext) {
 
+        log.info( "Binding {} to {}", wrappedTargetObject.getWrappedInstance(), authoritativeValueAccessor.get(String.class));
         super.bind(wrappedTargetObject, propertyName, targetObjectValue, authoritativeValueAccessor, triggers, applicationContext);
 
         if (wrappedTargetObject.getWrappedInstance() instanceof JTextComponent textComponent) {

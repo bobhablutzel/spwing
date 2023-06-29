@@ -28,6 +28,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.lang.NonNull;
 
+import javax.swing.*;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,6 +43,13 @@ public abstract class BaseBinder implements Binder {
                      @NonNull final ApplicationContext applicationContext) {
 
         this.bindValueToControl(wrappedTargetObject, propertyName, authoritativeValueAccessor, triggers, applicationContext);
+        checkForSuspiciousConditions(wrappedTargetObject, propertyName, authoritativeValueAccessor);
+    }
+
+
+    protected void checkForSuspiciousConditions(@NonNull final BeanWrapper wrappedTargetObject,
+                                                @NonNull final String propertyName,
+                                                @NonNull final Accessor authoritativeValueAccessor) {
     }
 
 

@@ -357,8 +357,19 @@ public class Spwing implements ApplicationContextAware  {
 
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
             performMacOSSpecificBootstrapConfiguration(applicationConfiguration);
+        } else if (SystemUtils.IS_OS_WINDOWS) {
+            performWindowsSpecificBootstramConfiguration(applicationConfiguration);
         }
+    }
 
+
+    private static void performWindowsSpecificBootstramConfiguration(ApplicationConfiguration applicationConfiguration) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
+                 UnsupportedLookAndFeelException e) {
+            log.warn("Unable to set the operating system look and feel" );
+        }
     }
 
 
@@ -435,12 +446,6 @@ public class Spwing implements ApplicationContextAware  {
             log.error( "Look and feel {} could not be used", lookAndFeel.getName(), e);
         }
 
-        // Create adapters for the about / preferences / quit events
-        Desktop desktop = Desktop.getDesktop();
-        desktop.setAboutHandler(aboutEvent -> fireCommand("cmdAbout", aboutEvent));
-        desktop.setPreferencesHandler(preferencesEvent -> fireCommand("cmdPreferences", preferencesEvent));
-        desktop.setQuitHandler((quitEvent, quitResponse) -> fireCommand("cmdQuit", quitEvent, quitResponse ));
-
         // OS specific work
         prepareOSSpecific();
     }
@@ -453,9 +458,16 @@ public class Spwing implements ApplicationContextAware  {
     private void prepareOSSpecific() {
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
             prepareMacOS();
+        } else if (SystemUtils.IS_OS_WINDOWS) {
+            prepareWindowOS();
         }
     }
 
+
+
+    private void prepareWindowOS() {
+        log.info("Inside prepareWindowsOS, version: {}", PlatformResourceUtils.getOSInfo());
+    }
 
     /**
      * Routine to prepare the application to run in a MacOS
@@ -466,6 +478,10 @@ public class Spwing implements ApplicationContextAware  {
      * TODO support Preferences handling
      */
     private void prepareMacOS() {
+        Desktop desktop = Desktop.getDesktop();
+        desktop.setAboutHandler(aboutEvent -> fireCommand("cmdAbout", aboutEvent));
+        desktop.setPreferencesHandler(preferencesEvent -> fireCommand("cmdPreferences", preferencesEvent));
+        desktop.setQuitHandler((quitEvent, quitResponse) -> fireCommand("cmdQuit", quitEvent, quitResponse ));
 
         // Ask the desktop to use our menu bar as the system menu bar
         Desktop.getDesktop().setDefaultMenuBar(this.menuBar);
@@ -897,11 +913,5 @@ public class Spwing implements ApplicationContextAware  {
         String title = applicationContext.getMessage(titleKey, arguments, defaultTitle, defaultLocale);
         JOptionPane.showMessageDialog(null, message, title, JOptionPane.ERROR_MESSAGE);
     }
-
-    @Configuration
-    @PropertySource("classpath:application.properties")
-    public static class PropertiesWithJavaConfig {
-    }
-    // TODO document the need for application properties
 
 }
