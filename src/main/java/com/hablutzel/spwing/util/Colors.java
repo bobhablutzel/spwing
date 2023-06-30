@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+@SuppressWarnings("Java9CollectionFactory")
 public class Colors {
 
     public static Map<String, Color> htmlColors;

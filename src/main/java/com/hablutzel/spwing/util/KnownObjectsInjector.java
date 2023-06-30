@@ -38,9 +38,9 @@ import java.util.Objects;
  * This bean post processor looks for beans that implement interfaces
  * that make them aware of framework components:
  * <ul>
- *     <il>{@link DocumentEventDispatcherAware}</il>
- *     <il>{@link DocumentEventPublisherAware}</il>
- *     <il>{@link SpwingAware}</il>
+ *     <li>{@link DocumentEventDispatcherAware}</li>
+ *     <li>{@link DocumentEventPublisherAware}</li>
+ *     <li>{@link SpwingAware}</li>
  * </ul>
  *
  * @author Bob Hablutzel
@@ -72,7 +72,6 @@ public class KnownObjectsInjector implements BeanPostProcessor {
         DocumentEventDispatcher documentEventDispatcher = documentScopeManager.getDocumentEventDispatcher();
         if (Objects.nonNull(documentEventDispatcher)) {
             if (bean instanceof DocumentEventDispatcherAware documentEventDispatcherAware) {
-                log.info( "Class {} is DocumentEventDispatcherAware, dispatcher = {}", bean.getClass().getName(), documentEventDispatcher);
                 documentEventDispatcherAware.setDocumentEventDispatcher(documentEventDispatcher);
             }
             if (bean instanceof DocumentEventPublisherAware documentEventPublisherAware) {

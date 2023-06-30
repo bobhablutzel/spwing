@@ -19,7 +19,6 @@ package com.hablutzel.spwing.view.bind.watch;
 
 import com.hablutzel.spwing.view.bind.Accessor;
 import com.hablutzel.spwing.view.bind.PropertyAccessor;
-import com.hablutzel.spwing.view.bind.Binder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.context.ApplicationContext;
@@ -64,7 +63,6 @@ public class JTextComponentBinder extends BaseBinder {
                      @NonNull final List<String> triggers,
                      @NonNull final ApplicationContext applicationContext) {
 
-        log.info( "Binding {} to {}", wrappedTargetObject.getWrappedInstance(), authoritativeValueAccessor.get(String.class));
         super.bind(wrappedTargetObject, propertyName, targetObjectValue, authoritativeValueAccessor, triggers, applicationContext);
 
         if (wrappedTargetObject.getWrappedInstance() instanceof JTextComponent textComponent) {

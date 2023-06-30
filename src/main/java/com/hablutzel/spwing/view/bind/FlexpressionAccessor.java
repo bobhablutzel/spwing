@@ -45,8 +45,8 @@ public class FlexpressionAccessor extends Accessor {
         throw new UnsupportedOperationException();
     }
 
-    public Object get(Class<?> targetClass) {
-        return conversionService.convert(flexpressionValue, targetClass);
+    public Object get() {
+        return flexpressionValue;
     }
 
     @Override

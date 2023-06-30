@@ -136,12 +136,10 @@ public class MenuLoader {
 
     /**
      * Rebuilds the menu bar based on the menu specification for this menu
-     * loader. The menu bar from the {@link Spwing#getMenuBar()} will be used.
-     * The result of this method will be a {@link java.util.Set} of {@link String}
-     * denoting the actions that are found in the menu bar.
+     * loader. The current menu bar will be obtained from the framework and
+     * preserved to the greatest extent possible.
      *
      * @param spwing The {@link Spwing} to use
-     * @return A Set of action ids from the menu bar
      */
     public void rebuildMenuBar(Spwing spwing) {
 

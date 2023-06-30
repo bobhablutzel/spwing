@@ -42,8 +42,8 @@ public class SpelExpressionAccessor extends Accessor {
     }
 
     @Override
-    public Object get(Class<?> targetClass) {
-        return spelExpression.getValue(evaluationContext, targetClass);
+    public Object get() {
+        return spelExpression.getValue(evaluationContext);
     }
 
     @Override

@@ -147,7 +147,7 @@ public class FlexpressionParser {
         } else {
 
             // Didn't match, return the default value
-            log.info("The expression {} could not be evaluated", expression);
+            log.warn("The expression {} could not be evaluated", expression);
             return defaultValue;
         }
     }

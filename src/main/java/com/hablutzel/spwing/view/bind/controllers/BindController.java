@@ -17,12 +17,5 @@
 
 package com.hablutzel.spwing.view.bind.controllers;
 
-
-import lombok.extern.slf4j.Slf4j;
-
-import javax.swing.*;
-
-@Slf4j
-public record ButtonGroupController(ButtonGroup buttonGroup) implements BindController {
-
+public interface BindController {
 }

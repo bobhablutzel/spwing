@@ -44,7 +44,7 @@ public class GenericPropertyBinder extends BaseBinder {
         try {
             return componentWrapper.isWritableProperty(propertyName);
         } catch (BeansException e) {
-            log.info( "{} cannot be handled (not a writeable property", propertyName );
+            log.warn( "{} cannot be handled (not a writeable property", propertyName );
             return false;
         }
     }
@@ -55,7 +55,7 @@ public class GenericPropertyBinder extends BaseBinder {
 
         if (wrappedTargetObject.getWrappedInstance() instanceof JLabel &&
             "text".equals(propertyName)) {
-            if (Objects.isNull(authoritativeValueAccessor.get(Object.class))) {
+            if (Objects.isNull(authoritativeValueAccessor.get())) {
                 log.warn( "Mapping JLabel text value to a null value" );
             }
         }

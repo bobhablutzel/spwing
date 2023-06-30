@@ -28,7 +28,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.lang.NonNull;
 
-import javax.swing.*;
 import java.util.List;
 import java.util.Objects;
 
@@ -105,7 +104,8 @@ public abstract class BaseBinder implements Binder {
         DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
 
         // Set the value
-        viewPropertyAccessor.set(authoritativeAccessor.get(expectedClass));
+        Object authoriativeValue = authoritativeAccessor.get();
+        viewPropertyAccessor.set(authoriativeValue);
 
         // If there are triggers for update, then add a listener for each
         if (Objects.nonNull(triggers)) {
@@ -114,8 +114,8 @@ public abstract class BaseBinder implements Binder {
                 protected void handleDocumentEvent(DocumentEvent documentEvent) {
 
                     // Get the new value, make sure we aren't setting it to the existing value to avoid loops
-                    Object newValue = authoritativeAccessor.get(expectedClass);
-                    if (!viewPropertyAccessor.get(expectedClass).equals(newValue)) {
+                    Object newValue = authoritativeAccessor.get();
+                    if (!viewPropertyAccessor.get().equals(newValue)) {
                         viewPropertyAccessor.set(newValue);
                     }
                 }

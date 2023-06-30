@@ -17,12 +17,36 @@
 
 package com.hablutzel.spwing.view.bind;
 
+
+/**
+ * Accessor classes give read, and potentially write,
+ * access to a value. Accessors are used when binding
+ * between view objects and model objects and provide
+ * an abstraction across bean properties, SPEL expression
+ * evaluation, Flexpression evaluations, and literal values.
+ *
+ * @author Bob Hablutzel
+ */
 public abstract class Accessor {
 
+    /**
+     * Determine if this is a writeable value
+     *
+     * @return TRUE for a writable value
+     */
     public abstract boolean isWriteable();
 
-    public abstract Object get(Class<?> targetClass);
+    /**
+     * Get the value
+     *
+     * @return The value
+     */
+    public abstract Object get();
 
+    /**
+     * Set the value
+     * @param value The new value
+     */
     public abstract void set(Object value);
 
     public abstract boolean canSupply(Class<?> targetClass);

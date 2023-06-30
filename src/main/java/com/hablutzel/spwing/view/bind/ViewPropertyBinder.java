@@ -18,6 +18,7 @@
 package com.hablutzel.spwing.view.bind;
 
 import com.hablutzel.spwing.util.FlexpressionParser;
+import com.hablutzel.spwing.view.bind.controllers.BindController;
 import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
 import com.hablutzel.spwing.view.bind.watch.GenericPropertyBinder;
 import lombok.extern.slf4j.Slf4j;
@@ -236,9 +237,16 @@ public class ViewPropertyBinder {
         // Block bindings to the name property
         if (invalidTargetProperty(viewObjectProperty)) return false;
 
-        // Get the view object bean wrapper. Make sure the property is writable
+        // Get the view object bean wrapper.
         BeanWrapper viewObjectBeanWrapper = beanWrapperFor(viewObject);
-        if (viewObjectBeanWrapper.isWritableProperty(viewObjectProperty)) {
+
+        // We have to determine if we can bind this property. There are
+        // two ways we can bind: (1) We have a BindController instance,
+        // which will have a dedicated Binder associated with it, or
+        // (2) we have a writable property that can be bound to.
+        final boolean isBindController = viewObject instanceof BindController;
+        final boolean isWriteable = viewObjectBeanWrapper.isWritableProperty(viewObjectProperty);
+        if (isBindController || isWriteable) {
 
             // See if there is a binder for this property given the source type
             binders.stream()

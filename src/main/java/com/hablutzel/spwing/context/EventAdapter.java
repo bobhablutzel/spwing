@@ -18,10 +18,45 @@ package com.hablutzel.spwing.context;
 
 import com.hablutzel.spwing.invoke.Invoker;
 
+import javax.swing.event.AncestorListener;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.MouseEvent;
+import java.awt.event.TextEvent;
+
+/**
+ * Event adapters are used to associate Spwing
+ * {@link Invoker} instances to AWT component events.
+ * In the Spwing model, events are given names; the
+ * names of AWT events are the same as the name of the
+ * method that would be called on the event listener in the
+ * AWT native system. For example, a {@link java.awt.event.MouseListener#mouseClicked(MouseEvent)}
+ * event will be translated into an event named "mouseClicked",
+ * {@link java.awt.event.TextListener#textValueChanged(TextEvent)} to
+ * "textValueChanged", etc. Exceptions to this rule are rare and
+ * only when there are conflicts - e.g. {@link java.awt.event.HierarchyBoundsListener#ancestorMoved(HierarchyEvent)}
+ * is mapped to "hierarchyAncestorMoved" in order to avoid conflicts
+ * with the more Swing specific on from {@link javax.swing.JComponent#addAncestorListener(AncestorListener)}
+ *
+ * @author Bob Hablutzel
+ */
 public interface EventAdapter {
 
+
+    /**
+     * Attach a listener for the given name, if the name
+     * maps to the events that are handled by this adapter.
+     * @param eventName The event name
+     * @param invoker The {@link Invoker} to call when the event occurs
+     */
     void attachListener( String eventName, Invoker invoker);
 
+
+    /**
+     * Returns TRUE if this adapter can understand the specified
+     * event.
+     * @param eventName The event name
+     * @return TRUE if this adapter can understand that event name
+     */
     boolean understands(String eventName);
 
 

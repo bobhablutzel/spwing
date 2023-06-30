@@ -210,9 +210,7 @@ public class CommandMethodsScanner {
             } else if (!listenerForSet.isEmpty()) {
 
                 // Listen for all the events that this method listens for
-                listenerForSet.forEach(listenerFor -> {
-                    defineListener(reflectiveInvoker, listenerFor.event(), listenerFor.target(), listenerFor.determination());
-                });
+                listenerForSet.forEach(listenerFor -> defineListener(reflectiveInvoker, listenerFor.event(), listenerFor.target(), listenerFor.determination()));
             } else if ("on".equals(methodFlag)) {
 
                 // Deal with case insensitivity for the first letter of the target (first) and event.

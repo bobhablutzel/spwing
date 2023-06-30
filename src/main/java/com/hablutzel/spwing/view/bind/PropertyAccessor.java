@@ -29,28 +29,25 @@ import org.springframework.core.convert.ConversionService;
 public class PropertyAccessor extends Accessor {
 
     private final BeanWrapper beanWrapper;
-    private final String propertyDescription;
+    private final String propertyName;
     @ToString.Exclude
     private final ConversionService conversionService;
 
     public boolean isWriteable() {
-        return beanWrapper.isWritableProperty(propertyDescription);
+        return beanWrapper.isWritableProperty(propertyName);
     }
 
     public void set(Object value) {
-        beanWrapper.setPropertyValue(propertyDescription, value);
+        final Class<?> propertyType = beanWrapper.getPropertyType(propertyName);
+        beanWrapper.setPropertyValue(propertyName, conversionService.convert(value, propertyType));
     }
 
-    public Object get(Class<?> targetClass) {
-        if (targetClass.isEnum() || Enum.class.isAssignableFrom(targetClass)) {
-            return beanWrapper.getPropertyValue(propertyDescription);
-        } else {
-            return conversionService.convert(beanWrapper.getPropertyValue(propertyDescription), targetClass);
-        }
+    public Object get() {
+        return beanWrapper.getPropertyValue(propertyName);
     }
 
     @Override
     public boolean canSupply(Class<?> targetClass) {
-        return conversionService.canConvert(beanWrapper.getPropertyType(propertyDescription), targetClass);
+        return conversionService.canConvert(beanWrapper.getPropertyType(propertyName), targetClass);
     }
 }

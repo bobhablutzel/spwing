@@ -128,7 +128,7 @@ public class ButtonGroupSelectedBinder implements Binder {
         if (targetObjectValue instanceof Map<?,?> buttonValues) {
             switch (bindingTo) {
                 case String, Enum -> {
-                    String value = conversionService.convert(authoritativeValueAccessor.get(Enum.class), String.class);
+                    String value = conversionService.convert(authoritativeValueAccessor.get(), String.class);
                     if (Objects.nonNull(value)) {
                         EnumerationStream.stream(buttonGroup.getElements()).forEach(button -> {
                             Object buttonValue = buttonValues.get(button);
@@ -137,9 +137,11 @@ public class ButtonGroupSelectedBinder implements Binder {
                     }
                 }
                 case Boolean -> {
-                    boolean value = (Boolean) authoritativeValueAccessor.get(Boolean.class);
-                    buttonGroup.getElements().nextElement().setSelected(value);
-                    buttonGroup.getElements().nextElement().setSelected(!value);
+                    Object rawValue = authoritativeValueAccessor.get();
+                    if (rawValue instanceof Boolean value){
+                        buttonGroup.getElements().nextElement().setSelected(value);
+                        buttonGroup.getElements().nextElement().setSelected(!value);
+                    }
                 }
             }
         }

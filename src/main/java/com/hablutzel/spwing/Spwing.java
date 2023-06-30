@@ -44,7 +44,9 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
 import org.springframework.context.support.ConversionServiceFactoryBean;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -466,7 +468,7 @@ public class Spwing implements ApplicationContextAware  {
 
 
     private void prepareWindowOS() {
-        log.info("Inside prepareWindowsOS, version: {}", PlatformResourceUtils.getOSInfo());
+        log.debug("Inside prepareWindowsOS, version: {}", PlatformResourceUtils.getOSInfo());
     }
 
     /**

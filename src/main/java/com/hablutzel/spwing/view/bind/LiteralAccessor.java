@@ -36,8 +36,8 @@ public class LiteralAccessor extends Accessor {
         throw new UnsupportedOperationException();
     }
 
-    public Object get(Class<?> targetClass) {
-        return conversionService.convert(value, targetClass);
+    public Object get() {
+        return value;
     }
 
     @Override

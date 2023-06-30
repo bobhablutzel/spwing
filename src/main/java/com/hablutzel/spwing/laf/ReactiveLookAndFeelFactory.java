@@ -43,25 +43,25 @@ public abstract class ReactiveLookAndFeelFactory implements LookAndFeelFactory {
 
         // Listen to changes in the system dark state, and react
         // on the fly if possible.
-        detector.registerListener( isDark -> {
-            SwingUtilities.invokeLater( () -> {
-                try {
-
-                    // Set the new look & feel
-                    log.debug( "Reacting to OS change" );
-                    UIManager.setLookAndFeel(get(isDark));
-
-                    // Refresh all the existing windows to match the new look & feel
-                    Arrays.stream(Window.getWindows()).forEach(SwingUtilities::updateComponentTreeUI);
-
-                } catch (UnsupportedLookAndFeelException e) {
-                    log.error("Unable to set look and feel reactively", e);
-                }
-            });
-        });
+        detector.registerListener( isDark -> SwingUtilities.invokeLater(() -> reactToThemeChange(isDark)));
 
         // Set the initial look and feel
         return get(detector.isDark());
+    }
+
+    private void reactToThemeChange(Boolean isDark) {
+        try {
+
+            // Set the new look & feel
+            log.debug("Reacting to OS change");
+            UIManager.setLookAndFeel(get(isDark));
+
+            // Refresh all the existing windows to match the new look & feel
+            Arrays.stream(Window.getWindows()).forEach(SwingUtilities::updateComponentTreeUI);
+
+        } catch (UnsupportedLookAndFeelException e) {
+            log.error("Unable to set look and feel reactively", e);
+        }
     }
 
 

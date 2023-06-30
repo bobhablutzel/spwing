@@ -64,12 +64,13 @@ public class AbstractButtonBinder extends BaseBinder {
             if ("selected".equals(propertyName) && authoritativeValueAccessor.isWriteable()) {
                 abstractButton.addChangeListener(e -> {
                     boolean isButtonSelected = abstractButton.isSelected();
-                    if (authoritativeValueAccessor.get(Boolean.class) instanceof Boolean isModelSelected) {
+                    Object authoritativeValue = authoritativeValueAccessor.get();
+                    if (authoritativeValue instanceof Boolean isModelSelected) {
                         if (isButtonSelected != isModelSelected) {
                             authoritativeValueAccessor.set(isButtonSelected);
                         }
                     } else {
-                        log.error( "Got an unexpected value from the accessor: {}", authoritativeValueAccessor.get(Boolean.class));
+                        log.error( "Got an unexpected value from the accessor: {}", authoritativeValue);
                     }
                 });
             }

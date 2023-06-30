@@ -54,8 +54,6 @@ public abstract class ModelFactory<T> {
      *
      * @param modelClass The model class (a class annotated with {@link Model}
      * @return A new instance of the model class
-     * @implNote This will create a new "document" scope containing this
-     * model.
      */
     public static <T> ModelFactory<T> forModelClass(final ApplicationContext applicationContext, final Class<T> modelClass) {
 

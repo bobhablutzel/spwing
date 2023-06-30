@@ -117,7 +117,6 @@ public class ComponentFactory {
 
     public ButtonGroup newButtonGroup(final String name) {
         ButtonGroup buttonGroup = new ButtonGroup();
-        log.info( "Adding button group {}", name );
         createdObjects.put(name, buttonGroup);
         return buttonGroup;
     }

@@ -20,12 +20,9 @@ package com.hablutzel.spwing.view.factory.svwf;
 
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
-import com.hablutzel.spwing.util.EnumerationStream;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
-import com.hablutzel.spwing.view.adapter.JTextFieldEventAdapter;
 import com.hablutzel.spwing.view.bind.Accessor;
-import com.hablutzel.spwing.view.factory.ComponentFactory;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +34,6 @@ import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
@@ -50,8 +46,10 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
-import java.util.*;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -535,9 +533,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 });
 
                 // Walk through all the key/value pairs for this component.
-                ctx.kvPair().forEach(kvPairContext -> {
-                    handleKVPairForComponent(activeComponent, kvPairContext);
-                });
+                ctx.kvPair().forEach(kvPairContext -> handleKVPairForComponent(activeComponent, kvPairContext));
             } else {
                 log.error("Cannot create {}, no such class or class is abstract", classAlias);
                 cleanParse = false;
@@ -658,9 +654,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 layoutContainer.setLayout(new FlowLayout());
             }
 
-            ctx.identifierElement().forEach(flowElementContext -> {
-                onNamedComponent(flowElementContext.element, layoutContainer::add, false);
-            });
+            ctx.identifierElement().forEach(flowElementContext -> onNamedComponent(flowElementContext.element, layoutContainer::add, false));
         }
     }
 

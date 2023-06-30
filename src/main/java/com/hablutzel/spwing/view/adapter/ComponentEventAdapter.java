@@ -33,6 +33,9 @@ import java.util.function.Supplier;
 @Slf4j
 public abstract class ComponentEventAdapter implements EventAdapter {
 
+    /**
+     * The event names understood at this level
+     */
     private static final Set<String> knownEventNames = Set.of(
             "mouseClicked", "mousePressed", "mouseReleased", "mouseEntered", "mouseExited", "mouseWheelMoved", "mouseMoved",
             "componentResized", "componentMoved", "componentShown", "componentHidden", "focusGained", "focusLost",
@@ -40,10 +43,28 @@ public abstract class ComponentEventAdapter implements EventAdapter {
             "caretPositionChanged", "inputMethodTextChanged", "keyTyped", "keyPressed", "keyReleased"
     );
 
+    /**
+     * The {@link Component} being adapted
+     */
     private final Component component;
 
+    /**
+     * When the {@link Invoker} is called, we want to be able to
+     * provide at minimum the component that is being watched. This
+     * method gives the adapter an opportunity to provide those
+     * additional parameters to inject into the {@link Invoker} before
+     * the method is called.
+     * @return A map of classes to value {@link Supplier} instances.
+     */
     protected abstract Map<Class<?>,Supplier<Object>> getParameterMap();
 
+
+    /**
+     * See if we can attach a listener for the given event.
+     *
+     * @param eventName The event name
+     * @param invoker The {@link Invoker} to call when the event occurs
+     */
     @Override
     public void attachListener(String eventName, Invoker invoker) {
         log.debug( "In ComponentEventAdapter (component {}) for event {}", component, eventName);
@@ -187,11 +208,30 @@ public abstract class ComponentEventAdapter implements EventAdapter {
         }
     }
 
+
+    /**
+     * Returns TRUE if we can understand the given event
+     *
+     * @param eventName The event name
+     * @return TRUE if we understand the event
+     */
     @Override
     public boolean understands(String eventName) {
         return knownEventNames.contains(eventName) || eventName.startsWith("Property");
     }
 
+
+    /**
+     * Routine to call the {@link Invoker} in response to an event
+     * being signalled by the {@link Component} we are tracking. This
+     * method gives the adapter a chance to provide parameters that
+     * should be added to the available parameter list; this is
+     * minimally the {@link Component} being watched and the actual
+     * event payload (if any) from the AWT event listener.
+     *
+     * @param eventObject The object that generated the event
+     * @param invoker The invoker
+     */
     protected void callInvokerForAction(EventObject eventObject, Invoker invoker) {
         invoker.registerParameterSupplier(eventObject.getClass(), () -> eventObject);
         getParameterMap().forEach(invoker::registerParameterSupplier);
@@ -199,11 +239,28 @@ public abstract class ComponentEventAdapter implements EventAdapter {
     }
 
 
+    /**
+     * AWT doesn't provide an adapter for the {@link InputMethodListener}
+     * interface with default values, so that is provided here.
+     *
+     * @author Bob Hablutzel
+     */
     private static class InputMethodListenerAdapter implements InputMethodListener {
+
+        /**
+         * Default implementation does nothing.
+         *
+         * @param event the event to be processed
+         */
         @Override
         public void inputMethodTextChanged(InputMethodEvent event) {
         }
 
+        /**
+         * Default implementation does nothing.
+         *
+         * @param event the event to be processed
+         */
         @Override
         public void caretPositionChanged(InputMethodEvent event) {
         }
