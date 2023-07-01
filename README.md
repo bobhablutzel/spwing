@@ -41,12 +41,26 @@ notice. However, the basic functionality works.
 
 ## Roadmap
 - Replace the current json based menu specification with a DSL
+- Better structural support for models (submodels,controllers,views)
 - Support all Swing visual components
   - (Currently supported: JLabel, JTextField, JRadioButton, JCheckBox, JButton)
 - Additional binding implementations
 - Splash screen
 - Preferences dialog & storage
 - Testing and support for Windows & Linux
+
+## Obtaining
+
+Spwing is available on major Maven repositories. The current
+version is 0.5.
+
+```xml
+        <dependency>
+            <groupId>com.hablutzel.spwing</groupId>
+            <artifactId>spwing</artifactId>
+            <version>0.5</version>
+        </dependency>
+```
 
 ## The Spwing approach
 
@@ -61,9 +75,9 @@ The framework can open multiple documents, and can support documents of multiple
 types. The plumbing of knowing which document is active is hidden from the 
 application programmer, but can be accessed at any time. 
 
-In addition to the documents, the Swping framework supports a separate application
+In addition to the documents, the Spwing framework supports a separate application
 class. This is typically used for common configurations (like a shared main menu)
-but is optional in the framework; a Swping application can function with only 
+but is optional in the framework; a Spwing application can function with only 
 document classes defined.
 
 Spwing documents are based on the MVC (Model-View-Controller) paradigm, though perhaps
@@ -170,7 +184,7 @@ import java.io.Serial;
  * a string. The field is bound to the label created by
  * the view, so that changes to the model are reflected
  * in the view automatically. <br>
- * Swping supports automatic saving and opening for
+ * Spwing supports automatic saving and opening for
  * models that implement serialization. The {@link Model}
  * annotation gives the model an opportunity to define the
  * file extension of the files. By doing this, the application
