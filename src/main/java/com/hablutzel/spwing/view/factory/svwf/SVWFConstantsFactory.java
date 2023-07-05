@@ -17,10 +17,10 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
-import com.hablutzel.spwing.util.Colors;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
+import java.awt.*;
 
 
 @Service
@@ -47,5 +47,10 @@ public class SVWFConstantsFactory implements SVWFComponentFactory {
         parseContext.addComponent("$TRAILING", SwingConstants.TRAILING);
         parseContext.addComponent("$NEXT", SwingConstants.NEXT);
         parseContext.addComponent("$PREVIOUS", SwingConstants.PREVIOUS);
+        parseContext.addComponent("$LEFT_ALIGNMENT", Component.LEFT_ALIGNMENT);
+        parseContext.addComponent("$RIGHT_ALIGNMENT", Component.RIGHT_ALIGNMENT);
+        parseContext.addComponent("$CENTER_ALIGNMENT", Component.CENTER_ALIGNMENT);
+        parseContext.addComponent("$BOTTOM_ALIGNMENT", Component.BOTTOM_ALIGNMENT);
+        parseContext.addComponent("$TOP_ALIGNMENT", Component.TOP_ALIGNMENT);
     }
 }
