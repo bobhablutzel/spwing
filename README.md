@@ -61,6 +61,28 @@ version is 0.5.
             <version>0.5</version>
         </dependency>
 ```
+## Demos
+
+The Spwing project aims to build out a robust set of demonstration applications, both to demonstrate
+specific techniques and as a tutorial on using the framework. The demos build in complexity; the first
+demos are fairly simple but demonstrate key capabilities.
+
+All the demos automatically have the ability to open multiple document windows, save the contents
+of the document, post event boxes, use menus, adapt to the look and feel of the platform, and so
+forth. That's tables stakes for the framework.
+
+- [SpwingLabelButtonDemo](https://github.com/bobhablutzel/SpwingLabelButtonDemo): A simple
+application with a label that displays the value of a model element. Demonstrates
+the basic components of Spwing (Application, Model, Controller, View) and introduces
+the SVWF view layout language. Demonstrates unidirectional binding of a Swing component
+to the value of a model element. Demonstrates how handler methods are associated with 
+view components and how the model can be passed to handler methods.
+- [SpwingBoundTextFieldDemo](https://github.com/bobhablutzel/SpwingBoundTextFieldDemo): Builds
+on the SpwingLabelButtonDemo, adding bi-directional binding of view elements to model
+properties. In this demo you can update the model text field by typing or by button, and
+see that the model element value actually changes. Shows how to arrange buttons on the 
+right of a window with expected spacing. Also introduces localization of messages
+and a common technique for associating controllers with models.
 
 ## The Spwing approach
 
