@@ -115,7 +115,7 @@ invokeStatement
     ;
 
 componentStatement
-    :   componentName=Identifier COLON classAlias=Identifier OPAREN (kvPair (COMMA kvPair)*)? CPAREN
+    :   componentName=Identifier COLON classAlias=Identifier (OPAREN (kvPair (COMMA kvPair)*)? CPAREN)?
     ;
 
 kvPair
@@ -126,8 +126,14 @@ pairValue
     : integer=Integer_Literal
     | string=String_Literal
     | bool=Boolean_Literal
+    | floatVal=Float_Literal
     | id=Identifier
     | size=dimension
+    | in=inset
+    ;
+
+inset
+    :   OPAREN top=Integer_Literal COMMA left=Integer_Literal COMMA bottom=Integer_Literal COMMA right=Integer_Literal CPAREN
     ;
 
 dimension
@@ -135,7 +141,7 @@ dimension
     ;
 
 bindStatement
-    :   target=targetClause '=>' (rootClause)? expression=String_Literal triggerClause?
+    :   target=targetClause op=(BIND_OP|PROPERTY_BIND_OP) (rootClause)? expression=String_Literal triggerClause?
     ;
 
 targetClause
@@ -205,7 +211,25 @@ layoutStatement
     :   component=Identifier COLON
             (   borderLayoutDescription
             |   boxLayoutDescription
+            |   buttonBarLayoutDescription
+            |   gridBagLayoutDescription
             |   flowLayoutDescription )
+    ;
+
+gridBagLayoutDescription
+    :   'gridBagLayout' OPAREN gridBagElementDescription (COMMA gridBagElementDescription)* CPAREN
+    ;
+
+gridBagElementDescription
+    :   element=identifierElement modifiers=gridModifiers? placement=placementSpec?
+    ;
+
+gridModifiers
+    :   OPAREN kvPair (COMMA kvPair)* CPAREN
+    ;
+
+placementSpec
+    :   AT topLeft=Identifier (COLON botRight=Identifier)?
     ;
 
 flowLayoutDescription
@@ -236,6 +260,10 @@ boxElement
     |   filler=OPAREN fillerSpec (COMMA fillerSpec)* CPAREN
     ;
 
+buttonBarLayoutDescription
+    :   'buttonBar' OPAREN identifierElement (COMMA identifierElement)* CPAREN
+    ;
+
 
 fillerSpec
     :   name=('minSize'|'maxSize'|'prefSize') size=dimension
@@ -257,6 +285,10 @@ COLON : ':';
 SEMI : ';';
 EQUAL : '=';
 HASH : '#';
+AT : '@';
+DASH : '-';
+BIND_OP : '=>';
+PROPERTY_BIND_OP : '==>';
 
 /**
  * Lexical representation for an integer

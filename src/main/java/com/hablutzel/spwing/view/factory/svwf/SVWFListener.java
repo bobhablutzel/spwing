@@ -18,6 +18,8 @@
 package com.hablutzel.spwing.view.factory.svwf;
 
 
+import com.hablutzel.spwing.constants.ConstantContext;
+import com.hablutzel.spwing.constants.ContextualConstant;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
@@ -52,6 +54,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 /**
@@ -64,6 +68,7 @@ import java.util.function.Function;
 @Slf4j
 @RequiredArgsConstructor
 public class SVWFListener extends SpwingViewFileBaseListener {
+    public static final Pattern GRID_COORDINATE_PATTERN = Pattern.compile("([a-zA-Z]+)(\\d+)");
     private final Object modelObject;
     private final Object controllerObject;
     private final ApplicationContext applicationContext;
@@ -344,10 +349,12 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // the expression, and the potential triggers
         Object rootObject = getRootClauseObject(ctx.rootClause());
         String expression = stripStringLiteral(ctx.expression);
+        Accessor accessor = parseContext.getViewPropertyBinder().toAccessor(rootObject, expression);
+
+
         List<String> triggers = getTriggers(ctx.triggerClause());
 
         // Get the property accessor for this element
-        Accessor accessor = parseContext.getViewPropertyBinder().toAccessor(rootObject, expression);
         if (Objects.nonNull(accessor)) {
 
             // See if we have a group or single binding statement
@@ -565,7 +572,10 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             if (Objects.nonNull(propertyType)) {
 
                 // Push the value to the component.
-                final Object unconvertedValue = declaredValue.get();
+                Object unconvertedValue = declaredValue.get();
+                if (unconvertedValue instanceof ContextualConstant contextualConstant) {
+                    unconvertedValue = contextualConstant.get(ConstantContext.SwingConstants);
+                }
                 final Object convertedValue = conversionService.convert(unconvertedValue, propertyType);
                 activeComponent.setPropertyValue(propertyName, convertedValue);
             } else {
@@ -588,13 +598,22 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 return valueContext.bool.getText().equals("true");
             } else if (Objects.nonNull(valueContext.string)) {
                 return stripStringLiteral(valueContext.string);
+            } else if (Objects.nonNull(valueContext.floatVal)) {
+                return getFloatValue(valueContext.floatVal);
             } else if (Objects.nonNull(valueContext.size)) {
                 return parseDimension(valueContext.size);
+            } else if (Objects.nonNull(valueContext.in)) {
+                return new Insets( getIntValue(valueContext.in.top), getIntValue(valueContext.in.left),
+                        getIntValue(valueContext.in.bottom), getIntValue(valueContext.in.right));
             } else if (Objects.nonNull(valueContext.id)) {
                 return parseContext.getKnownComponents().get(valueContext.id.getText());
             } else {
                 return getIntValue(valueContext.integer);
             }
+        }
+
+        <T> T as(Class<T> clazz) {
+            return conversionService.convert(get(), clazz);
         }
     }
 
@@ -630,18 +649,22 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private void onNamedComponent(Token token, Consumer<Component> consumer, boolean wrapButtonGroup) {
         final Object element = getNamedElement(token);
-        if (element instanceof Component component) {
-            consumer.accept(component);
-        } else if (element instanceof Group group) {
-            if (wrapButtonGroup) {
-                JPanel panel = parseContext.getComponentFactory().newJPanel("_anon_" + token.getText());
-                group.components.forEach(panel::add);
-                consumer.accept(panel);
-            } else {
-                group.components.forEach(consumer);
-            }
+        if (Objects.isNull(element) && "filler".equals(token.getText())) {
+            consumer.accept(new JPanel());
         } else {
-            log.warn("Could not find element {} as a component or group", token.getText());
+            if (element instanceof Component component) {
+                consumer.accept(component);
+            } else if (element instanceof Group group) {
+                if (wrapButtonGroup) {
+                    JPanel panel = parseContext.getComponentFactory().newJPanel("_anon_" + token.getText());
+                    group.components.forEach(panel::add);
+                    consumer.accept(panel);
+                } else {
+                    group.components.forEach(consumer);
+                }
+            } else {
+                log.warn("Could not find element {} as a component or group", token.getText());
+            }
         }
     }
 
@@ -658,9 +681,183 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         }
     }
 
+
+    @Override
+    public void enterButtonBarLayoutDescription(SpwingViewFileParser.ButtonBarLayoutDescriptionContext ctx) {
+        if (Objects.nonNull(layoutContainer)) {
+
+            // Create the box layout - always horizontal for button bars
+            setLayout(container -> new BoxLayout(container, BoxLayout.X_AXIS));
+
+            // Start by adding a right glue element
+            layoutContainer.add(Box.createHorizontalGlue());
+
+            // For each of the identified elements, add the element and a rigid area
+            // between to the right
+            ctx.identifierElement().forEach( identifierElementContext -> {
+                onNamedComponent(identifierElementContext.element, layoutContainer::add, false);
+                layoutContainer.add(Box.createRigidArea(new Dimension(10, 10)));
+            });
+        }
+    }
+
+
+    /**
+     * Implements the "gridBagLayout" functionality
+     * @param ctx the parse tree
+     */
+    @Override
+    public void enterGridBagLayoutDescription(SpwingViewFileParser.GridBagLayoutDescriptionContext ctx) {
+
+        // Make sure we have a container to layout
+        if (Objects.nonNull(layoutContainer)) {
+
+            // Add the grid bag layout to the container
+            final GridBagLayout gridBagLayout = new GridBagLayout();
+            layoutContainer.setLayout(gridBagLayout);
+
+            ctx.gridBagElementDescription().forEach( gridBagElementDescriptionContext -> {
+
+                // Create a new GridBagConstraints
+                GridBagConstraints gridBagConstraints = new GridBagConstraints();
+
+                // Handle the modifiers for this element
+                if (Objects.nonNull(gridBagElementDescriptionContext.modifiers)) {
+                    gridBagElementDescriptionContext.modifiers.kvPair().forEach( kvPair -> {
+                        String propertyName = kvPair.k.getText();
+                        DeclaredValue declaredValue = new DeclaredValue(kvPair.v);
+
+                        Object unconvertedValue = declaredValue.get();
+                        if (unconvertedValue instanceof ContextualConstant contextualConstant) {
+                            unconvertedValue = contextualConstant.get(ConstantContext.GridBagConstants);
+                        }
+
+                        switch (propertyName) {
+                            case "gridx" -> gridBagConstraints.gridx = doConvert(unconvertedValue, Integer.class, 0);
+                            case "gridy" -> gridBagConstraints.gridy = doConvert(unconvertedValue, Integer.class, 0);
+                            case "weightx" -> gridBagConstraints.weightx = doConvert(unconvertedValue, Float.class, 0.0f);
+                            case "weighty" -> gridBagConstraints.weighty = doConvert(unconvertedValue, Float.class, 0.0f);
+                            case "gridwidth" -> gridBagConstraints.gridwidth = doConvert(unconvertedValue, Integer.class, 0);
+                            case "gridheight" -> gridBagConstraints.gridheight = doConvert(unconvertedValue, Integer.class, 0);
+                            case "fill" -> gridBagConstraints.fill = doConvert(unconvertedValue, Integer.class, 0);
+                            case "anchor" -> gridBagConstraints.anchor = doConvert(unconvertedValue, Integer.class, 0);
+                            case "ipadx" -> gridBagConstraints.ipadx = doConvert(unconvertedValue, Integer.class, 0);
+                            case "ipady" -> gridBagConstraints.ipady = doConvert(unconvertedValue, Integer.class, 0);
+                            case "insets" -> gridBagConstraints.insets = doConvert(unconvertedValue, Insets.class, new Insets(0, 0, 0, 0));
+                            default -> log.warn("Ignored unknown modifier {}", propertyName);
+                        }
+                    });
+                }
+
+                // If there isn't a placement, then we use a default placement
+                if (Objects.nonNull(gridBagElementDescriptionContext.placement)) {
+
+                    // We need to decode the height and width. To make the parser
+                    // simpler, these are specified as general identifiers, but need
+                    // to fit a more constrained patter of letters followed by numbers;
+                    // moreover the letters and numbers have to translate into
+                    // valid coordinates. Columns are specified by the initial letter(s),
+                    // with A being column 1, B being column 2, AA being column 27, etc.
+                    // (In other words, spreadsheet cell syntax). The numbers are the
+                    // rows, with the first row being 1. A rectangular range can be specified
+                    // by specifying a topLeft and bottomRight separated by a colon (again
+                    // spreadsheet syntax) with each constrained as above and the additional
+                    // constraint that the bottomRight must be at least as top and at least as
+                    // left as the topLeft (in other words, the range must include at least
+                    // one cell and cannot be specified backwards).
+                    final String topLeftSpec = gridBagElementDescriptionContext.placement.topLeft.getText();
+                    final Dimension topLeft = decodeGridCoordinate(topLeftSpec);
+                    gridBagConstraints.gridx = topLeft.width;
+                    gridBagConstraints.gridy = topLeft.height;
+                    if (Objects.nonNull(gridBagElementDescriptionContext.placement.botRight)) {
+                        final String botRightSpec = gridBagElementDescriptionContext.placement.botRight.getText();
+                        Dimension botRight = decodeGridCoordinate(botRightSpec);
+                        gridBagConstraints.gridwidth = botRight.width - topLeft.width + 1;
+                        gridBagConstraints.gridheight = botRight.height - topLeft.height + 1;
+                    } else {
+                        gridBagConstraints.gridwidth = 1;
+                        gridBagConstraints.gridheight = 1;
+                    }
+                }
+
+                // Add this element to the specified cell
+                onNamedComponent(gridBagElementDescriptionContext.element.element,
+                        component -> layoutContainer.add(component, gridBagConstraints),
+                        true );
+
+            });
+        }
+    }
+
+
+    private <T> T doConvert(Object unconvertedValue, Class<T> clazz, T defaultValue ) {
+        if (Objects.nonNull(unconvertedValue) && conversionService.canConvert(unconvertedValue.getClass(), clazz)) {
+            return conversionService.convert(unconvertedValue, clazz);
+        } else {
+            return defaultValue;
+        }
+    }
+
+
+
+    /**
+     * Translate a spreadsheet style grid coordinate (A2, B5) into a
+     * corresponding {@link Dimension} specification.
+     * <ul>
+     *     <li>A1 => Dimension(1,1)</li>
+     *     <li>A2 => Dimension(1,2)</li>
+     *     <li>B1 => Dimension(2,1)</li>
+     *     etc.
+     * </ul>
+     * @param gridCoordinate The spreadsheet style coordinate specification
+     * @return The corresponding dimension.
+     */
+    private Dimension decodeGridCoordinate(String gridCoordinate) {
+        Matcher matcher = GRID_COORDINATE_PATTERN.matcher(gridCoordinate);
+        if (matcher.matches()) {
+            return new Dimension(
+                    decodeColumn(matcher.group(1).toUpperCase()),
+                    Integer.parseInt(matcher.group(2)) - 1);
+        } else {
+            log.error( "{} is not a valid grid coordinate specification", matcher.group(1));
+            cleanParse = false;
+            return new Dimension(0, 0);
+        }
+    }
+
+
+    /**
+     * Decode a column specification 'A', 'B', etc into a
+     * corresponding row: 1, 2
+     * <ul>
+     *     <li>A => 1</li>
+     *     <li>B => 2</li>
+     *     <li>AA => 27</li>
+     *     etc
+     * </ul>
+     * @param columnSpecification
+     * @return
+     */
+    public int decodeColumn(String columnSpecification) {
+        int columnNumber = 0;
+        for (int i = 0; i < columnSpecification.length(); ++i) {
+            columnNumber = columnNumber * 26 + (columnSpecification.charAt(i) - 'A');
+        }
+        return columnNumber;
+    }
+
+    /**
+     * Handle a boxLayout layout description
+     *
+     * @param ctx the parse tree
+     */
     @Override
     public void enterBoxLayoutDescription(SpwingViewFileParser.BoxLayoutDescriptionContext ctx) {
+
+        // Make sure we have a container to layout
         if (Objects.nonNull(layoutContainer)) {
+
+            // Determine whether we are arranging horizontally or vertically and create the layout
             int axis = tokenEquals("vertical", ctx.orientation) ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS;
             setLayout(container -> new BoxLayout(container, axis));
 
