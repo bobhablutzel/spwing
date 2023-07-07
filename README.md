@@ -52,13 +52,13 @@ notice. However, the basic functionality works.
 ## Obtaining
 
 Spwing is available on major Maven repositories. The current
-version is 0.5.
+version is 0.5.1.
 
 ```xml
         <dependency>
             <groupId>com.hablutzel.spwing</groupId>
             <artifactId>spwing</artifactId>
-            <version>0.5</version>
+            <version>0.5.1</version>
         </dependency>
 ```
 ## Demos
@@ -76,13 +76,18 @@ application with a label that displays the value of a model element. Demonstrate
 the basic components of Spwing (Application, Model, Controller, View) and introduces
 the SVWF view layout language. Demonstrates unidirectional binding of a Swing component
 to the value of a model element. Demonstrates how handler methods are associated with 
-view components and how the model can be passed to handler methods.
+view components and how the model can be passed to handler methods. *Requires Spwing 0.5 or later*
 - [SpwingBoundTextFieldDemo](https://github.com/bobhablutzel/SpwingBoundTextFieldDemo): Builds
 on the SpwingLabelButtonDemo, adding bi-directional binding of view elements to model
 properties. In this demo you can update the model text field by typing or by button, and
 see that the model element value actually changes. Shows how to arrange buttons on the 
 right of a window with expected spacing. Also introduces localization of messages
-and a common technique for associating controllers with models.
+and a common technique for associating controllers with models. *Requires Spwing 0.5 or later*
+- [SpwingGridBagDemo](https://github.com/bobhablutzel/SpwingGridBagDemo): Essentially
+the same as the [SpwingBoundTextFieldDemo](https://github.com/bobhablutzel/SpwingBoundTextFieldDemo),
+except using a GridBagLayout instead of a BoxLayout. GridBagLayouts are powerful,
+but take a lot of code to set up. Spwing provides a declarative approach to GridBagLayouts
+resulting in a much more concise implementation. *Requires Spwing 0.5.1 or later*
 
 ## The Spwing approach
 
