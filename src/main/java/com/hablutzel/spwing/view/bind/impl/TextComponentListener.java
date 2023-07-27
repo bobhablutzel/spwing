@@ -15,7 +15,7 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.watch;
+package com.hablutzel.spwing.view.bind.impl;
 
 import com.hablutzel.spwing.view.bind.Accessor;
 import lombok.RequiredArgsConstructor;

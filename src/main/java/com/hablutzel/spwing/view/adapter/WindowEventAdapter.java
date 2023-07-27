@@ -16,18 +16,18 @@
 
 package com.hablutzel.spwing.view.adapter;
 
-import com.hablutzel.spwing.context.EventAdapter;
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
-import lombok.RequiredArgsConstructor;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
-import java.util.EventObject;
-import java.util.Map;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 @Slf4j
@@ -35,8 +35,9 @@ public class WindowEventAdapter extends ContainerEventAdapter {
 
     private final Window window;
 
-    public WindowEventAdapter(Window window) {
-        super(window);
+    public WindowEventAdapter(final Window window,
+                              final Spwing spwing) {
+        super(window, spwing);
         this.window = window;
     }
 
@@ -121,8 +122,10 @@ public class WindowEventAdapter extends ContainerEventAdapter {
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(Window.class, () -> window);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription,ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(Window.class, window));
+        return result;
     }
 
 

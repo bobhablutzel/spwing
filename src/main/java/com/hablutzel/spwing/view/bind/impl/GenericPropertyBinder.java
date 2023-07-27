@@ -15,7 +15,7 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.watch;
+package com.hablutzel.spwing.view.bind.impl;
 
 import com.hablutzel.spwing.view.bind.Accessor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,6 @@ import org.springframework.beans.BeansException;
 import org.springframework.lang.NonNull;
 
 import javax.swing.*;
-import java.util.Objects;
 
 
 /**
@@ -53,9 +52,8 @@ public class GenericPropertyBinder extends BaseBinder {
                                                 @NonNull final String propertyName,
                                                 @NonNull final Accessor authoritativeValueAccessor) {
 
-        if (wrappedTargetObject.getWrappedInstance() instanceof JLabel &&
-            "text".equals(propertyName)) {
-            if (Objects.isNull(authoritativeValueAccessor.get())) {
+        if (wrappedTargetObject.getWrappedInstance() instanceof JLabel && "text".equals(propertyName)) {
+            if (null == authoritativeValueAccessor.get()) {
                 log.warn( "Mapping JLabel text value to a null value" );
             }
         }

@@ -17,29 +17,51 @@
 package com.hablutzel.spwing.model;
 
 import com.hablutzel.spwing.Spwing;
-import com.hablutzel.spwing.annotations.Model;
 import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.invoke.DirectInvoker;
 import com.hablutzel.spwing.invoke.DirectParameterDescription;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
+import com.hablutzel.spwing.util.FileChooserUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.ResolvableType;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.lang.reflect.Executable;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 
 @Slf4j
 public abstract class ModelFactory<T> {
+
+
+    /**
+     * Called to open a document and create the model from the contents
+     * of that document. This needs to prompt the
+     * user for the location and read the data from that location
+     *
+     * @param documentSession The document session instance
+     * @return A new model object
+     */
+    public abstract T open(DocumentSession documentSession);
+
+
+    /**
+     * Called to create a new, empty model representing the default
+     * new state of a document
+     *
+     * @param documentSession The document session instance
+     * @return The new model object.
+     */
+    public abstract T create(DocumentSession documentSession);
+
+
 
     /**
      * Builds a ModelFactory instance for the given class. The
@@ -48,59 +70,51 @@ public abstract class ModelFactory<T> {
      * named open that returns from an existing file. If the
      * open method takes a File instance, the framework will
      * automatically prompt the user for the File instance before
-     * calling open, based on the file extensions provided
-     * in the {@link Model} annotation
-     * on the model class.
+     * calling open, based on the file extensions provided by
+     * specifying a fileExtension bean.
      *
-     * @param modelClass The model class (a class annotated with {@link Model}
+     * @param modelClass The model class
      * @return A new instance of the model class
      */
+    @SuppressWarnings("unchecked")
     public static <T> ModelFactory<T> forModelClass(final ApplicationContext applicationContext, final Class<T> modelClass) {
 
-        // Attempt to get the annotation for this class
-        final Model model = AnnotatedElementUtils.getMergedAnnotation(modelClass, Model.class);
-        if (Objects.isNull(model)) {
-            return null;
+        // See if there is a ModelFactory instance defined as a bean in the context
+        ResolvableType modelFactoryType = ResolvableType.forClassWithGenerics(ModelFactory.class, modelClass );
+        String[] beanNames = applicationContext.getBeanNamesForType(modelFactoryType);
+        if (beanNames.length != 0) {
+            log.debug( "Returning bean {}", beanNames[0]);
+            return (ModelFactory<T>) applicationContext.getBean(beanNames[0]);
         }
 
-        // Find the create method
-        final Executable createMethod = Arrays.stream(modelClass.getDeclaredMethods())
-                .filter(method -> method.getName().equals("create") && Modifier.isStatic(method.getModifiers()))
+        // We don't have a model factory bean, so we will build a ProxyFactory on the fly.
+        // We look to see if there is a static create method in the model class itself that
+        // can create a model instance. If not, we'll use the application context to look for
+        // the model as a bean. In the latter case the model bean can be created by the
+        // model configuration.
+        final Invoker create = Arrays.stream(modelClass.getDeclaredMethods())
+                .filter(method -> method.getName().equals("create") &&
+                                  Modifier.isStatic(method.getModifiers()) &&
+                                  modelClass.isAssignableFrom(method.getReturnType()))
                 .findFirst()
-                .orElse(null); // Can't use the constructor here because it's looking for a Method
-        Executable newExecutable = Objects.nonNull(createMethod)
-                ? createMethod
-                : getPublicConstructor(modelClass);
+                .map(method -> (Invoker) new ReflectiveInvoker(applicationContext, null, method))
+                .orElse(new ContextBeanInvoker(applicationContext, modelClass));
 
         // Find the open method. If the model defines file extensions, then the open method
         // needs to take a file.
-        final boolean isExpectedToTakeAFile = model.extensions().length > 0;
+        final List<String> fileExtensions = FileChooserUtils.getActiveFileExtensions(applicationContext);
         final Invoker open = Arrays.stream(modelClass.getDeclaredMethods())
-                .filter(method -> method.getName().equals("open") && Modifier.isStatic(method.getModifiers())
-                        && (!isExpectedToTakeAFile || Arrays.stream(method.getParameterTypes()).anyMatch(parameterClass -> parameterClass.isAssignableFrom(File.class))))
+                .filter(method -> method.getName().equals("open") &&
+                                  Modifier.isStatic(method.getModifiers()) &&
+                                  modelClass.isAssignableFrom(method.getReturnType()) &&
+                                  (!fileExtensions.isEmpty() || Arrays.stream(method.getParameterTypes()).anyMatch(parameterClass -> parameterClass.isAssignableFrom(File.class))))
                 .<Invoker>map(method -> new ReflectiveInvoker(applicationContext, null, method))
                 .findFirst()
-                .orElseGet(() -> new DefaultReadFileFunctionality(applicationContext));
+                .orElse(new DefaultReadFileFunctionality(applicationContext));
 
-        Invoker create = new ReflectiveInvoker(applicationContext, null, newExecutable);
         // Return the new ModelFactory
-        return new ProxyModelFactory<>(modelClass, applicationContext, open, create, isExpectedToTakeAFile);
+        return new ProxyModelFactory<>(modelClass, applicationContext, open, create, fileExtensions);
     }
-
-
-    private static Executable getPublicConstructor(Class<?> modelClass) {
-        if (modelClass.getConstructors().length > 0) {
-            return modelClass.getConstructors()[0];
-        } else {
-            log.error("Model class {} has no public constructors, and no static create() method", modelClass.getName());
-            throw new RuntimeException("Invalid model class");
-        }
-    }
-
-
-    public abstract T open(DocumentSession documentSession);
-
-    public abstract T create(DocumentSession documentSession);
 
 
     private static class DefaultReadFileFunctionality extends DirectInvoker {
@@ -128,6 +142,34 @@ public abstract class ModelFactory<T> {
             } else {
                 throw new IllegalArgumentException("Expecting file");
             }
+        }
+    }
+
+
+
+    private static class ContextBeanInvoker extends Invoker {
+        private final ApplicationContext applicationContext;
+        private final Class<?> modelClass;
+
+        public ContextBeanInvoker(ApplicationContext applicationContext, Class<?> modelClass) {
+            super(applicationContext);
+            this.applicationContext = applicationContext;
+            this.modelClass = modelClass;
+        }
+
+        @Override
+        protected List<? extends ParameterDescription> getParameterDescriptions() {
+            return List.of();
+        }
+
+        @Override
+        protected Object doInvoke(Object[] dynamicArguments) {
+            return applicationContext.getBean(modelClass);
+        }
+
+        @Override
+        protected String getMethodName() {
+            return "<get from application context>";
         }
     }
 }

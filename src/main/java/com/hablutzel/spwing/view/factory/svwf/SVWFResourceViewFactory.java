@@ -16,19 +16,20 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
-import com.hablutzel.spwing.annotations.Controller;
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.annotations.Model;
+import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 
@@ -46,8 +47,6 @@ import java.util.function.Supplier;
 @Service
 @Scope("document")
 public class SVWFResourceViewFactory extends SVWFViewFactory {
-
-
 
     /**
      * Get the Swing components from the controller object via a SVWF file.
@@ -69,40 +68,22 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
      * and will have the extension ".svwf"
      *
      */
-    public Component build(final @Model Object model,
-                           final @Controller Object controller,
-                           final ApplicationContext applicationContext) {
+    public Component build(final DocumentSession documentSession,
+                           final @Model Object model,
+                           final Spwing spwing) {
 
         final List<Supplier<InputStream>> nameMappers = new ArrayList<>();
 
-        // Make sure we have a model. We should, but never hurts to be careful
-        if (Objects.nonNull(model)) {
-            final Class<?> modelClass = model.getClass();
-            final String modelClassName = modelClass.getSimpleName();
-            final String modelNameToViewName = modelClassName.endsWith("Model")
-                    ? modelClassName.substring(0, modelClassName.length()- "Model".length() ) + "View"
-                    : "";
-
-            log.debug( "Adding check for resource {}", modelClassName);
-            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelClassName, "svwf"));
-            log.debug( "Adding check for resource {}", modelNameToViewName);
-            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelNameToViewName, "svwf"));
-        }
-
-        // Same approach with the controller. Make sure we have one
-        if (Objects.nonNull(controller)) {
-            final Class<?> controllerClass = controller.getClass();
-            final String controllerClassName = controllerClass.getSimpleName();
-            final String controllerNameToViewName = controllerClassName.endsWith("Controller" )
-                    ? controllerClassName.substring(0, controllerClassName.length() - "Controller".length()) + "View"
-                    : "";
-
-            log.debug( "Adding check for resource {}", controllerClassName);
-            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(controllerClass, controllerClassName, "svwf"));
-            log.debug( "Adding check for resource {}", controllerNameToViewName);
-            nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(controllerClass, controllerNameToViewName, "svwf"));
-
-        }
+        // Get the model class from the session
+        final Class<?> modelClass = documentSession.getModelClass();
+        final String modelClassName = modelClass.getSimpleName();
+        final String modelNameToViewName = modelClassName.endsWith("Model")
+                ? modelClassName.substring(0, modelClassName.length()- "Model".length() ) + "View"
+                : "";
+        log.debug( "Adding check for resource {}", modelClassName);
+        nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelClassName, "svwf"));
+        log.debug( "Adding check for resource {}", modelNameToViewName);
+        nameMappers.add(() -> PlatformResourceUtils.getPlatformResource(modelClass, modelNameToViewName, "svwf"));
 
         try (InputStream swvfStream = nameMappers.stream()
                 .map(Supplier::get)
@@ -110,7 +91,7 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
                 .findFirst()
                 .orElse(null)) {
 
-            return fromStream(model, controller, applicationContext, swvfStream);
+            return fromStream(model, spwing, swvfStream);
         } catch (IOException e) {
             log.error("Error reading SVWF file", e);
             throw new RuntimeException("Error reading SVWF file", e);

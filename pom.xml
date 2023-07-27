@@ -6,7 +6,7 @@
 
     <groupId>com.hablutzel.spwing</groupId>
     <artifactId>spwing</artifactId>
-    <version>0.5.1</version>
+    <version>0.6.0</version>
     <packaging>jar</packaging>
     <name>Spwing cross-platform application framework</name>
     <description>Spwing provides a rapid cross-platform application development framework built on top of Java Swing and the Spring framework</description>

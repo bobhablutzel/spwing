@@ -16,12 +16,15 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 
 import javax.swing.*;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 public class JTextFieldEventAdapter extends JTextComponentEventAdapter {
@@ -30,8 +33,9 @@ public class JTextFieldEventAdapter extends JTextComponentEventAdapter {
 
     private final JTextField textField;
 
-    public JTextFieldEventAdapter(JTextField textField) {
-        super(textField);
+    public JTextFieldEventAdapter(final JTextField textField,
+                                  final Spwing spwing) {
+        super(textField, spwing);
         this.textField = textField;
     }
 
@@ -51,8 +55,10 @@ public class JTextFieldEventAdapter extends JTextComponentEventAdapter {
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JTextField.class, () -> textField);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JTextField.class, textField));
+        return result;
     }
 
 

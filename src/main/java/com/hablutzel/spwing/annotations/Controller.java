@@ -16,36 +16,23 @@
 
 package com.hablutzel.spwing.annotations;
 
-import org.springframework.context.annotation.Scope;
-import org.springframework.stereotype.Component;
-
-import java.lang.annotation.*;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 
 /**
- * Defines a controller in the Spwing application. Controllers are the
- * active part of the application. {@link Model} defines the
- * data (often a POJO / bean), the Swing components define the View,
- * and bean instances marked with {@link Controller}
- *
+ * Used for method parameters that want to get the current
+ * controller without knowing the controller class name.
+ * If you annotate a parameter method with Controller,
+ * the current controller (potentially null) will be
+ * injected by the {@link com.hablutzel.spwing.invoke.Invoker}
  * @author Bob Hablutzel
  */
 @Documented
-@Target({ElementType.TYPE, ElementType.PARAMETER})
+@Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
-@Handler()
-@Scope("document")
-@Component
 public @interface Controller {
-
-    /**
-     * Allow the user to specify a bean name for the bean when it
-     * is created. Since this is a document-scope bean, it will
-     * be a singleton in the document scope and this bean name will
-     * be unique in that scope.
-     *
-     * @return The bean name alias
-     */
-    String alias() default "controller";
-
 }

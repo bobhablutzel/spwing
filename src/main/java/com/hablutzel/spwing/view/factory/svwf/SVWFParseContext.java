@@ -17,24 +17,20 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.view.bind.ViewPropertyBinder;
 import com.hablutzel.spwing.view.factory.ComponentFactory;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.annotation.AnnotatedElementUtils;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 
 
@@ -61,12 +57,11 @@ public final class SVWFParseContext {
     @Getter
     private final ViewPropertyBinder viewPropertyBinder;
 
-    public SVWFParseContext(final Object modelObject,
-                            final Object controllerObject,
+    public SVWFParseContext(final Spwing spwing,
                             final ApplicationContext applicationContext,
                             final DocumentEventDispatcher documentEventDispatcher) {
         this.applicationContext = applicationContext;
-        this.componentFactory = new ComponentFactory(modelObject, controllerObject, documentEventDispatcher, knownComponents);
+        this.componentFactory = new ComponentFactory(spwing, documentEventDispatcher, knownComponents);
         this.viewPropertyBinder = new ViewPropertyBinder(applicationContext);
 
 
@@ -78,7 +73,6 @@ public final class SVWFParseContext {
 
     public void registerKnownSwingClasses() {
         definitionMap.put("AbstractButton", new ElementDefinition(AbstractButton.class, null));
-//        definitionMap.put("Box", javax.swing.Box.class);
 //        definitionMap.put("CellRendererPane", javax.swing.CellRendererPane.class);
         definitionMap.put("Component", new ElementDefinition(Component.class, null ));
         definitionMap.put("Container", new ElementDefinition(Container.class, componentFactory::newContainer ));
@@ -91,7 +85,7 @@ public final class SVWFParseContext {
         definitionMap.put("JCheckBox", new ElementDefinition(JCheckBox.class, componentFactory::newJCheckBox ));
 //        definitionMap.put("JCheckBoxMenuItem", javax.swing.JCheckBoxMenuItem.class);
 //        definitionMap.put("JColorChooser", javax.swing.JColorChooser.class);
-//        definitionMap.put("JComboBox", javax.swing.JComboBox.class);
+        definitionMap.put("JComboBox", new ElementDefinition(JComboBox.class, componentFactory::newJComboBox));
 //        definitionMap.put("JDesktopIcon", javax.swing.JInternalFrame.JDesktopIcon.class);
 //        definitionMap.put("JDesktopPane", javax.swing.JDesktopPane.class);
 //        definitionMap.put("JEditorPane", javax.swing.JEditorPane.class);

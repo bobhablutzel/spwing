@@ -18,6 +18,7 @@
 package com.hablutzel.spwing.view.bind;
 
 
+import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.context.ApplicationContext;
 import org.springframework.lang.NonNull;
@@ -46,7 +47,7 @@ public interface Binder {
               @NonNull final String propertyName,
               @NonNull final Object targetObjectValue,
               @NonNull final Accessor authoritativeValueAccessor,
-              @NonNull final List<String> triggers,
+              @NonNull final List<RefreshTrigger> triggers,
               @NonNull final ApplicationContext applicationContext);
 
 }

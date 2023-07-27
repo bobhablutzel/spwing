@@ -17,49 +17,90 @@
 package com.hablutzel.spwing;
 
 
-import com.hablutzel.spwing.annotations.*;
+import com.hablutzel.spwing.annotations.Application;
+import com.hablutzel.spwing.annotations.Controller;
+import com.hablutzel.spwing.annotations.EnablerFor;
+import com.hablutzel.spwing.annotations.Handler;
+import com.hablutzel.spwing.annotations.HandlerFor;
+import com.hablutzel.spwing.annotations.Model;
+import com.hablutzel.spwing.command.CommandAwareUndoManager;
 import com.hablutzel.spwing.component.BuiltInCommands;
 import com.hablutzel.spwing.component.CommandMethods;
 import com.hablutzel.spwing.component.CommandMethodsScanner;
 import com.hablutzel.spwing.context.DocumentScope;
 import com.hablutzel.spwing.context.DocumentScopeManager;
 import com.hablutzel.spwing.context.DocumentSession;
-import com.hablutzel.spwing.converter.*;
+import com.hablutzel.spwing.converter.ImageToIconConverter;
+import com.hablutzel.spwing.converter.StringToColorConverter;
+import com.hablutzel.spwing.converter.StringToFontConverter;
+import com.hablutzel.spwing.converter.StringToIconConverter;
+import com.hablutzel.spwing.converter.StringToImageConverter;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.events.DocumentEventPublisher;
 import com.hablutzel.spwing.invoke.Invoker;
 import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
+import com.hablutzel.spwing.laf.DefaultLookAndFeelFactory;
+import com.hablutzel.spwing.laf.LookAndFeelFactory;
 import com.hablutzel.spwing.menu.MenuLoader;
+import com.hablutzel.spwing.model.ControllerFor;
+import com.hablutzel.spwing.model.ModelConfiguration;
 import com.hablutzel.spwing.model.ModelFactory;
-import com.hablutzel.spwing.util.*;
+import com.hablutzel.spwing.util.ClassUtils;
+import com.hablutzel.spwing.util.DocumentElementPostBeanProcessor;
+import com.hablutzel.spwing.util.PlatformResourceBundleMessageSource;
+import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.ViewWindowListener;
+import com.hablutzel.spwing.view.factory.svwf.SVWFResourceViewFactory;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SystemUtils;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.support.ConversionServiceFactoryBean;
 import org.springframework.context.support.ResourceBundleMessageSource;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
+import javax.swing.undo.UndoManager;
 import java.awt.*;
+import java.awt.desktop.AboutEvent;
+import java.awt.desktop.PreferencesEvent;
+import java.awt.desktop.QuitEvent;
+import java.awt.desktop.QuitResponse;
 import java.awt.event.ActionEvent;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.*;
+import java.util.Locale;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.ResourceBundle;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -90,8 +131,8 @@ import java.util.function.Function;
  * </ul>
  * One of the primary concepts in the Spwing framework is the concept of
  * a command handler. Handlers are methods associated with commands; the handler
- * method will be invoked when the command is fired (see {@link #fireCommand(String, Object...)}
- * and {@link #fireCommandWithResult(String, Class, Object, Object...)}).
+ * method will be invoked when the command is fired (see {@link #fireCommand(String, Function...)}
+ * and {@link #fireCommandWithResult(String, Class, Object, Function...)}).
  * Commands are fired automatically based on menu events; the identifier
  * for the menu item is the command associated with the menu item. The application
  * code can also fire commands directly to get the same functionality.
@@ -140,12 +181,6 @@ public class Spwing implements ApplicationContextAware  {
     @Getter
     private final DocumentScopeManager documentScopeManager;
 
-    /**
-     * The {@link ApplicationConfiguration} describing how the application is configured.
-     */
-    private final ApplicationConfiguration applicationConfiguration;
-
-
     private final CommandMethodsScanner commandMethodsScanner;
 
 
@@ -158,7 +193,7 @@ public class Spwing implements ApplicationContextAware  {
 
     /**
      * The preCommandHook will be check when firing a command
-     * (see {@link #fireCommand(String, Object...)}). If this
+     * (see {@link #fireCommand(String, Function...)}). If this
      * hook is not present, or the hook returns TRUE, the command
      * will fire. If the hook is present and returns false, the
      * command will not fire. This is a general hook for all
@@ -176,6 +211,10 @@ public class Spwing implements ApplicationContextAware  {
     @Setter
     private BiConsumer<Spwing, String> postCommandHook = null;
 
+    @Getter
+    @Setter
+    private Class<?> contextRoot;
+
     /**
      * The {@link JMenuBar} used to control the main application
      * menu instance
@@ -183,15 +222,7 @@ public class Spwing implements ApplicationContextAware  {
     @Getter
     private final JMenuBar menuBar = new JMenuBar();
 
-    /**
-     * The application object. This can be any class, but needs
-     * to be annotated with {@link Application}
-     */
-    private Object application;
-
-
     private final List<Object> applicationScopeHandlers = new ArrayList<>();
-
 
     /**
      * Map of menu command names to {@link CommandMethods} instances for the application scope handlers
@@ -213,17 +244,6 @@ public class Spwing implements ApplicationContextAware  {
      */
     public static Spwing launch(final Class<?> contextRoot) {
 
-        // Create a configuration for the application, based on the context root.
-        ApplicationConfiguration applicationConfiguration = new ApplicationConfiguration(contextRoot);
-
-        // Some OS-specific configuration has to be performed prior to the application context
-        // being loaded. For example, in MacOS, we have to set the application name before any
-        // Swing classes are loaded, which will (likely) occur when the application context
-        // refresh call is made below. In order to ensure that we can perform those configurations
-        // property, we perform some configuration now, before any Spring environment is set up
-        // (which might trigger the creation of the Swing classes)
-        performBootstrapConfiguration(applicationConfiguration);
-
         // Build the message source for the UI class; this contains all the framework messages
         PlatformResourceBundleMessageSource rootMessageSource = new PlatformResourceBundleMessageSource();
         rootMessageSource.setBundleClassLoader(Spwing.class.getClassLoader());
@@ -234,7 +254,7 @@ public class Spwing implements ApplicationContextAware  {
         // Attempt to find a resource bundle for the application
         try {
             // See if the application resource bundle can be loaded
-            getApplicationBundle(contextRoot); // Trigger the exception if not available
+            testForApplicationBundle(contextRoot); // Trigger the exception if not available
             PlatformResourceBundleMessageSource applicationMessageSource = new PlatformResourceBundleMessageSource();
             applicationMessageSource.setBundleClassLoader(contextRoot.getClassLoader());
             applicationMessageSource.addBasenames(contextRoot.getName());
@@ -245,6 +265,15 @@ public class Spwing implements ApplicationContextAware  {
             log.warn("Application specific resource bundle will not be created.");
         }
 
+
+        // Some OS-specific configuration has to be performed prior to the application context
+        // being loaded. For example, in MacOS, we have to set the application name before any
+        // Swing classes are loaded, which will (likely) occur when the application context
+        // refresh call is made below. In order to ensure that we can perform those configurations
+        // property, we perform some configuration now, before any Spring environment is set up
+        // (which might trigger the creation of the Swing classes)
+        performBootstrapConfiguration(contextRoot, registeredMessageSource);
+
         // Signal that we are initializing the framework.er
         log.info( registeredMessageSource.getMessage("SpwingInit", null, Locale.getDefault()));
 
@@ -252,29 +281,37 @@ public class Spwing implements ApplicationContextAware  {
         // application context to start, but will also contain the document scope manager
         // once we are able to create it (we have to create it after the application context).
         DefaultListableBeanFactory parentBeanFactory = new DefaultListableBeanFactory();
-        parentBeanFactory.registerSingleton("applicationConfiguration", applicationConfiguration );
         parentBeanFactory.registerSingleton("messageSource", registeredMessageSource);
 
         // Build the application context. We also need to create a new document scope manager
         // which will handle the "document" scope. This scope creates the equivalent of
         // a web session for the desktop applications, so that document scoped items are created
-        // as singletons for each document (and kept unique and seperate from each other).
+        // as singletons for each document (and kept unique and separate from each other).
         final AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext(parentBeanFactory);
         DocumentScopeManager documentScopeManager = new DocumentScopeManager(applicationContext);
         parentBeanFactory.registerSingleton("documentScopeManager", documentScopeManager );
         applicationContext.getBeanFactory().registerScope("document", new DocumentScope(documentScopeManager));
 
-        // We allow for aliases to be defined for the beans that are tagged as application, model, or controller
-        applicationContext.getBeanFactory().addBeanPostProcessor(new KeyBeanAliasProvider( applicationContext ));
-        final KnownObjectsInjector knownObjectsInjector = new KnownObjectsInjector(documentScopeManager);
-        applicationContext.getBeanFactory().addBeanPostProcessor(knownObjectsInjector);
+        // Add a new bean post-processor that handles the document-specific instances - the event publisher
+        // and dispatcher, document ID, etc.
+        final DocumentElementPostBeanProcessor documentElementPostBeanProcessor = new DocumentElementPostBeanProcessor(documentScopeManager);
+        applicationContext.getBeanFactory().addBeanPostProcessor(documentElementPostBeanProcessor);
 
         // Scan and refresh the context
         applicationContext.scan(contextRoot.getPackageName(), Spwing.class.getPackageName());
-        applicationContext.refresh();
+        try {
+            applicationContext.refresh();
+        } catch (BeanCreationException bce) {
+            log.error( "Error creating bean at startup time", bce);
+            log.error( "If the root cause is that the container bean is null, this is probably a document scope issue.");
+            log.error( "If the bean that failed is on a document-scoped object - for example, an instance of");
+            log.error( "ModelConfiguration<> consider either making the bean itself document scoped or static" );
+            throw bce;
+        }
 
         // At this point we have the Spwing singleton bean.
         Spwing spwing = applicationContext.getBean(Spwing.class);
+        spwing.setContextRoot(contextRoot);
 
         // Pass that to the document scope manager so we can be alerted when document scope changes
         documentScopeManager.setSpwing(spwing);
@@ -283,7 +320,7 @@ public class Spwing implements ApplicationContextAware  {
         Invoker.registerFrameworkAdapter( spwing::resolveInvokerParameter );
 
         // Allow it to be injected
-        knownObjectsInjector.setSpwing(spwing);
+        documentElementPostBeanProcessor.setSpwing(spwing);
 
         // Prepare the UI instance
         spwing.prepare();
@@ -294,8 +331,24 @@ public class Spwing implements ApplicationContextAware  {
     }
 
 
-    private static ResourceBundle getApplicationBundle( final Class<?> contextRoot ) {
-        return PlatformResourceUtils.platformAndBaseNames(contextRoot.getName()).stream()
+    /**
+     * The user has the option (but not obligation) to provide an application
+     * resource bundle that will be used for localization, etc. This routine
+     * tests to see if the resource bundle is available, using platform aware
+     * semantics.
+     * @param contextRoot The context root of the application.
+     * @see PlatformResourceUtils#platformAndBaseNames(String)
+     */
+
+    private static void testForApplicationBundle(final Class<?> contextRoot ) {
+
+        // Loop through all the possible application resource bundle names.
+        // We want these to be platform specific, so we build the platform
+        // names and loop through that. For each, we attempt to load the
+        // resource bundle (map statement), catching the exception that gets
+        // thrown if not loadable and returning null. Find the first non-null
+        // instance, and, if there is one, we know that we have a resource bundle.
+        PlatformResourceUtils.platformAndBaseNames(contextRoot.getName()).stream()
                 .map( name -> {
                     try {
                         return ResourceBundle.getBundle(name, Locale.getDefault(), contextRoot.getClassLoader());
@@ -306,40 +359,71 @@ public class Spwing implements ApplicationContextAware  {
                 })
                 .filter(Objects::nonNull)
                 .findFirst()
-                .orElse(null);
+                .ifPresentOrElse( resourceBundle -> log.debug( "Found an application resource bundle" ),
+                        () -> { throw new MissingResourceException("bundle", contextRoot.getName(), "*"); });
     }
 
 
-    private Object resolveInvokerParameter(ParameterDescription parameterDescription) {
-        Class<?> parameterTargetType = parameterDescription.getType();
-        Object activeModel = documentScopeManager.getActiveModel();
-        Object activeController = documentScopeManager.getActiveController();
+    /**
+     * The {@link Invoker} allows for frameworks to impose special parameters that will be
+     * injected into parameter slots based on criteria. This routine performs that functionality
+     * for the Spwing framework, injecting framework specific classes such as the application,
+     * model, controller, etc.
+     *
+     * @param parameterDescription The parameter description to resolver
+     * @return The resolved object, or null if not resolved.
+     */
 
-        if (Window.class.isAssignableFrom(parameterTargetType)) {
-            return KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
-        } else if (ApplicationConfiguration.class.isAssignableFrom(parameterTargetType)) {
-            return applicationConfiguration;
-        } else if (DocumentSession.class.isAssignableFrom(parameterTargetType)) {
-            return documentScopeManager.getActiveSession();
-        } else if (DocumentEventDispatcher.class.isAssignableFrom(parameterTargetType)) {
-            return documentScopeManager.getDocumentEventDispatcher();
-        } else if (DocumentEventPublisher.class.isAssignableFrom(parameterTargetType)) {
-            return new DocumentEventPublisher(documentScopeManager.getDocumentEventDispatcher());
-        } else if (Objects.nonNull(activeModel) && activeModel.getClass().isAssignableFrom(parameterTargetType)) {
-            return activeModel;
-        } else if (Objects.nonNull(activeController) && activeController.getClass().isAssignableFrom(parameterTargetType)) {
-            return activeController;
-        } else if (Objects.nonNull(this.application) && this.application.getClass().isAssignableFrom(parameterTargetType)) {
-            return this.application;
-        } else if (parameterDescription.hasParameterAnnotation(Application.class)) {
-            return this.application;
-        } else if (parameterDescription.hasParameterAnnotation(Model.class)) {
-            return activeModel;
-        } else if (parameterDescription.hasParameterAnnotation(Controller.class)) {
-            return activeController;
-        } else {
-            return null;
+    private ParameterResolution resolveInvokerParameter(ParameterDescription parameterDescription) {
+        ResolvableType parameterResolvableType = parameterDescription.getType();
+        Class<?> parameterTargetType = parameterResolvableType.getRawClass();
+        if (null != parameterTargetType) {
+            Object activeApplication = getActiveApplication();
+            final DocumentSession activeSession = documentScopeManager.getActiveSession();
+            if (Window.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow());
+            } else if (null != activeApplication && activeApplication.getClass().isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(activeApplication);
+            } else if (parameterDescription.hasParameterAnnotation(Application.class)) {
+                return ParameterResolution.of(activeApplication);
+            } else if (JFrame.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(null != activeSession ? activeSession.getFrame() : ParameterResolution.unresolved());
+            } else if (DocumentSession.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(activeSession);
+            } else if (DocumentEventDispatcher.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(null != activeSession ? documentScopeManager.getDocumentEventDispatcher() : null);
+            } else if (DocumentEventPublisher.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(null != activeSession ? new DocumentEventPublisher(documentScopeManager.getDocumentEventDispatcher()) : null);
+            } else if (UndoManager.class.equals(parameterTargetType) ||
+                    CommandAwareUndoManager.class.isAssignableFrom(parameterTargetType)) {
+                return ParameterResolution.of(null != activeSession ? activeSession.getUndoManager() : null);
+            } else if (null != activeSession && null != activeSession.getModelClass() && parameterTargetType.isAssignableFrom(activeSession.getModelClass())) {
+                return ParameterResolution.of(activeSession.getModel());
+            } else if (null != activeSession && null != activeSession.getControllerClass() && parameterTargetType.isAssignableFrom(activeSession.getControllerClass())) {
+                return ParameterResolution.of(activeSession.getController());
+            } else if (parameterDescription.hasParameterAnnotation(Model.class)) {
+                return ParameterResolution.of(activeSession != null ? activeSession.getModel() : null);
+            } else if (parameterDescription.hasParameterAnnotation(Controller.class)) {
+                return ParameterResolution.of(activeSession != null ? activeSession.getController() : null);
+            }
         }
+
+        return ParameterResolution.unresolved();
+    }
+
+
+    /**
+     * Find the application - a bean in the application context with the
+     * {@link Application} annotation. If there are more than one such bean,
+     * one is selected at random.
+     *
+     * @return The application, or null
+     */
+    public Object getActiveApplication() {
+        // Get the objects that are annotated with Application.
+        // Pick the first one
+        Map<String,Object> applicationBeans = applicationContext.getBeansWithAnnotation(Application.class);
+        return applicationBeans.isEmpty() ? null : applicationBeans.values().iterator().next();
     }
 
 
@@ -347,25 +431,33 @@ public class Spwing implements ApplicationContextAware  {
      * Perform configuration that needs to be performed before the Swing or Spring
      * environments are created.
      *
-     * @param applicationConfiguration The {@link ApplicationConfiguration} instance
+     * @param contextRoot The context root class
+     * @param messageSource The {@link MessageSource} instance for getting application names, etc.
      */
-    private static void performBootstrapConfiguration(ApplicationConfiguration applicationConfiguration) {
+    private static void performBootstrapConfiguration(final Class<?> contextRoot,
+                                                      final MessageSource messageSource) {
 
         // Find the look and feel to load
         // TODO allow selectable LAF
-        ClassUtils.find(applicationConfiguration.getContextRoot(), LookAndFeel.class).stream()
+        ClassUtils.find(contextRoot, LookAndFeel.class).stream()
                 .map(BeanDefinition::getBeanClassName)
                 .forEach(log::info);
 
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
-            performMacOSSpecificBootstrapConfiguration(applicationConfiguration);
+            performMacOSSpecificBootstrapConfiguration(contextRoot, messageSource);
         } else if (SystemUtils.IS_OS_WINDOWS) {
-            performWindowsSpecificBootstramConfiguration(applicationConfiguration);
+            performWindowsSpecificBootstrapConfiguration(contextRoot, messageSource);
         }
     }
 
 
-    private static void performWindowsSpecificBootstramConfiguration(ApplicationConfiguration applicationConfiguration) {
+    /**
+     * Windows specific bootstrap configuration. Sets the default LookAndFeel
+     * @param contextRoot The context root
+     * @param messageSource The {@link MessageSource} instance for getting application names, etc.
+     */
+    private static void performWindowsSpecificBootstrapConfiguration(final Class<?> contextRoot,
+                                                                     final MessageSource messageSource) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
@@ -376,14 +468,26 @@ public class Spwing implements ApplicationContextAware  {
 
 
     /**
+     * Routine to get the application name. The application name should be defined
+     * in the property file for the context root class as a string named "applicationName";
+     * if this is not available the simple name of the context root will be used.
+     * @return The application name
+     */
+    public String getApplicationName() {
+        return applicationContext.getMessage("applicationName", null, contextRoot.getSimpleName(), Locale.getDefault());
+    }
+
+    /**
      * Perform pre-Swing and pre-Spring environment configuration for MacOS
      *
-     * @param applicationConfiguration The {@link ApplicationConfiguration} instance
+     * @param contextRoot The context root class
      */
-    private static void performMacOSSpecificBootstrapConfiguration(ApplicationConfiguration applicationConfiguration) {
+    private static void performMacOSSpecificBootstrapConfiguration(final Class<?> contextRoot,
+                                                                   final MessageSource messageSource) {
 
-        // Find the application name to use for the Apple menu
-        String applicationName = applicationConfiguration.getApplicationName();
+        // Find the application name to use for the Apple menu. This has to be
+        // set before the Spring classes are loaded.
+        String applicationName = messageSource.getMessage("applicationName", null, contextRoot.getSimpleName(), Locale.getDefault() );
 
         // Perform general property setting to adopt the MacOS look & feel
         System.setProperty("apple.laf.useScreenMenuBar", "true");
@@ -395,67 +499,64 @@ public class Spwing implements ApplicationContextAware  {
 
 
     /**
-     * Prepare the environment for execution. This will find the
-     * application instance and register it as a document component. The
-     * application is found in the following sequence:
-     * - First the context root is checked to see if it has
-     * and {@link Application} annotation. If so, it is
-     * the application instance
-     * - If the context root is not the application, then a bean
-     * with the name "application" is looked for. This allows
-     * a configuration object to create the application bean.
-     * - If both fail, the context is scanned for any bean
-     * with an {@link Application} annotation, and the first one
-     * encountered is used. This is non-predictive and should be
-     * avoided, although it will generally work as there will
-     * generally only be a single class annotation with {@link Application}
+     * Prepare the environment for execution. This happens after the
+     * Spring environment is created, so it has access to and uses
+     * the application context to find beans. This routine
+     * <ul>
+     *     <li>Creates the "application-scope" handlers:
+     *         <ul>
+     *             <li>Adds the built-in commands as a last-change handler</li>
+     *             <li>Finds any beans that are of the class of the context root and adds them as handlers.</li>
+     *             <li>Finds any beans that are annotated with {@link Application} and adds them as handlers.</li>
+     *         </ul>
+     *     </li>
+     *     <li>Sets up an initial menu bar</li>
+     *     <li>Sets up the look and feel</li>
+     * </ul>
+     *
      */
     public void prepare() {
 
         // Get the built-in commands, and add it to the list of handlers.
         this.applicationScopeHandlers.add(applicationContext.getBean(BuiltInCommands.class));
 
-        // We don't need to have an application bean per se; the application bean is
-        // needed only if there is functionality at the application level. However,
-        // we cannot have more than one application bean.
-        // If there is an application bean, then remember it as an application scope handler
-        final Class<?> applicationClass = applicationConfiguration.getApplicationClass();
-        if (Objects.nonNull(applicationClass)) {
-            // Get the scope for the application. For All-in-one applications, the
-            // application annotation is only present for the configuration information
-            // (application name, copyright, etc) and the class itself will be in document
-            // scope. Ensure that the scope here isn't "document" before trying to create the
-            // bean.
-            Scope scope = AnnotatedElementUtils.getMergedAnnotation(applicationClass, Scope.class);
-            if (Objects.isNull(scope) || !"document".equals(scope.scopeName())) {
-                this.application = applicationContext.getBean(applicationClass);
-                this.applicationScopeHandlers.add(this.application);
-            }
-        }
+        // The context root object can, if defined as a bean, contain handler methods.
+        // In this case, we add it to the application scope handlers
+        Map<String,?> contextBeans = applicationContext.getBeansOfType(contextRoot);
+        applicationScopeHandlers.addAll(contextBeans.values());
 
         // Build the command methods for the application scope handlers
-        log.debug( "Application scope handlers: {}", applicationScopeHandlers);
         applicationCommandMethodsMap = commandMethodsScanner.scanDocumentComponents(this, applicationScopeHandlers);
+
+        // Add any beans annotated with @Application
+        applicationScopeHandlers.addAll(applicationContext.getBeansWithAnnotation(Application.class).values());
+
+        // Get the look & feel for the application. By default this will be the
+        // DefaultLookAndFeelFactory, but applications can create a bean of type
+        // LookAndFeelFactory. If there is more than one, the first will be used.
+        String[] lookAndFeelBeanNames = applicationContext.getBeanNamesForType(LookAndFeelFactory.class);
+        LookAndFeelFactory lookAndFeelFactory = lookAndFeelBeanNames.length > 0
+                ? applicationContext.getBean(lookAndFeelBeanNames[0], LookAndFeelFactory.class)
+                : new DefaultLookAndFeelFactory();
+        try {
+            UIManager.setLookAndFeel(lookAndFeelFactory.get());
+        } catch (UnsupportedLookAndFeelException e) {
+            log.error("Look and feel {} could not be used", lookAndFeelFactory.getClass().getName(), e);
+        }
 
         // Build the initial menu bar
         buildMenuBar(applicationScopeHandlers);
-
-        // Get the look & feel for the application
-        LookAndFeel lookAndFeel = applicationConfiguration.getLookAndFeel();
-        try {
-            UIManager.setLookAndFeel(lookAndFeel);
-        } catch (UnsupportedLookAndFeelException e) {
-            log.error( "Look and feel {} could not be used", lookAndFeel.getName(), e);
-        }
 
         // OS specific work
         prepareOSSpecific();
     }
 
+
+
     /**
      * Perform OS specific initializations. This will determine the
      * active OS and dispatch the OS specific logic.
-     * TODO support Linux & Windows.
+     * TODO support Linux.
      */
     private void prepareOSSpecific() {
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
@@ -480,10 +581,15 @@ public class Spwing implements ApplicationContextAware  {
      * TODO support Preferences handling
      */
     private void prepareMacOS() {
+
         Desktop desktop = Desktop.getDesktop();
-        desktop.setAboutHandler(aboutEvent -> fireCommand("cmdAbout", aboutEvent));
-        desktop.setPreferencesHandler(preferencesEvent -> fireCommand("cmdPreferences", preferencesEvent));
-        desktop.setQuitHandler((quitEvent, quitResponse) -> fireCommand("cmdQuit", quitEvent, quitResponse ));
+        desktop.setAboutHandler(aboutEvent -> fireCommand("cmdAbout",
+                ParameterResolution.forClass(AboutEvent.class,aboutEvent)));
+        desktop.setPreferencesHandler(preferencesEvent -> fireCommand("cmdPreferences",
+                ParameterResolution.forClass(PreferencesEvent.class,preferencesEvent)));
+        desktop.setQuitHandler((quitEvent, quitResponse) -> fireCommand("cmdQuit",
+                ParameterResolution.forClass(QuitEvent.class, quitEvent),
+                ParameterResolution.forClass(QuitResponse.class,quitResponse )));
 
         // Ask the desktop to use our menu bar as the system menu bar
         Desktop.getDesktop().setDefaultMenuBar(this.menuBar);
@@ -507,16 +613,27 @@ public class Spwing implements ApplicationContextAware  {
         // It really, really shouldn't be but best to check. Once we have
         // it, get the initial command, and see if that is specified. If the
         // initial command is not null or blank, then fire that command.
-        Application annotation = applicationConfiguration.getApplicationAnnotation();
-        if (Objects.nonNull(annotation)) {
-            String initialCommand = annotation.onStart();
-            if (Objects.nonNull(initialCommand) && !initialCommand.isBlank()) {
-                log.debug( "Firing initial command {}", initialCommand );
-                fireCommand(initialCommand, new ActionEvent(this, 0, initialCommand));
+        if (applicationContext.containsBean("launchCommand")) {
+            try {
+                String initialCommand = applicationContext.getBean("launchCommand", String.class);
+                if (!initialCommand.isBlank()) {
+                    log.debug( "Firing initial command {}", initialCommand );
+                    final ActionEvent actionEvent = new ActionEvent(this, 0, initialCommand);
+                    fireCommand(initialCommand, ParameterResolution.forClass(ActionEvent.class, actionEvent));
+                }
+            } catch (BeansException e) {
+                log.warn( "Was expecting \"launchCommand\" bean to be of (or convertable to) type String." );
             }
         }
     }
 
+
+    /**
+     * The framework supports a set of implicit conversions - from String to Font,
+     * for example - that are used in SVWF files and the like. This routine defines
+     * the conversion service that includes that specialized conversion classses.
+     * @return A new {@link ConversionService} with specialized converters
+     */
     @Bean
     ConversionService conversionService() {
         ConversionServiceFactoryBean factory = new ConversionServiceFactoryBean();
@@ -524,8 +641,8 @@ public class Spwing implements ApplicationContextAware  {
         convSet.add(new StringToFontConverter());
         convSet.add(new StringToColorConverter());
         convSet.add(new ImageToIconConverter());
-        convSet.add(new StringToImageConverter(applicationConfiguration.getContextRoot()));
-        convSet.add(new StringToIconConverter(applicationConfiguration.getContextRoot()));
+        convSet.add(new StringToImageConverter(contextRoot));
+        convSet.add(new StringToIconConverter(contextRoot));
         factory.setConverters(convSet);
         factory.afterPropertiesSet();
         return factory.getObject();
@@ -541,12 +658,8 @@ public class Spwing implements ApplicationContextAware  {
 
 
     public boolean isCommandEnabled(String commandID) {
-        ResultHolder<Boolean> resultHolder = new ResultHolder<>(false);
         Map<String,CommandMethods> activeCommandsMap = getActiveCommandMethodsMap();
-        if (activeCommandsMap.containsKey(commandID)) {
-            activeCommandsMap.get(commandID).doEnable(resultHolder::set);
-        }
-        return resultHolder.get();
+        return activeCommandsMap.containsKey(commandID) && activeCommandsMap.get(commandID).isEnabled(null);
     }
 
 
@@ -555,7 +668,7 @@ public class Spwing implements ApplicationContextAware  {
     }
 
     private void rebuildMenubarForDocumentHandlers(List<Object> handlers) {
-        buildMenuBar(Objects.isNull(handlers) ? applicationScopeHandlers : handlers);
+        buildMenuBar(null == handlers ? applicationScopeHandlers : handlers);
     }
 
 
@@ -566,9 +679,11 @@ public class Spwing implements ApplicationContextAware  {
      * @param command     The command to fire
      * @param injectedObjects The parameters to inject into the invocation
      */
-    public void fireCommand(String command, Object... injectedObjects) {
+    @SafeVarargs
+    public final void fireCommand(final String command,
+                                  final Function<ParameterDescription, ParameterResolution>... injectedObjects) {
         Runnable runnable = fireCommandWithResult(command, Runnable.class, null, injectedObjects );
-        if (Objects.nonNull(runnable)) {
+        if (null != runnable) {
             SwingUtilities.invokeLater(runnable);
         }
     }
@@ -585,17 +700,20 @@ public class Spwing implements ApplicationContextAware  {
      * @return The result of the call
      * @param <T> The expected type of the call
      */
-    public <T> T fireCommandWithResult( String command, Class<T> clazz, T defaultValue, Object... injectedObjects ) {
+    public <T> T fireCommandWithResult( final String command,
+                                        final Class<T> clazz,
+                                        final T defaultValue,
+                                        final Function<ParameterDescription,ParameterResolution>... injectedObjects ) {
 
         // Make sure we can fire the command.
         Map<String,CommandMethods> activeCommandMethodsMap = getActiveCommandMethodsMap();
-        if (activeCommandMethodsMap.containsKey(command)) {
+        if (null != activeCommandMethodsMap && activeCommandMethodsMap.containsKey(command)) {
 
             // Get the command methods to invoke for the command
             final CommandMethods commandMethods = activeCommandMethodsMap.get(command);
 
             // Fire the pre-command hook (if any)
-            boolean fire = Objects.isNull(preCommandHook) || preCommandHook.apply(this, command);
+            boolean fire = null == preCommandHook || preCommandHook.apply(this, command);
 
             // If we are still firing, then invoke the command
             if (fire) {
@@ -603,14 +721,14 @@ public class Spwing implements ApplicationContextAware  {
                 T result = commandMethods.fireCommandWithResult(clazz, defaultValue, injectedObjects);
 
                 // Call the post-command hook (if any)
-                if (Objects.nonNull(postCommandHook)) {
+                if (null != postCommandHook) {
                     postCommandHook.accept(this, command);
                 }
                 return result;
             }
         } else {
             log.warn( "No handler for {}", command );
-            log.debug( "Known commands: {}", activeCommandMethodsMap.keySet() );
+            log.debug( "Known commands: {}", null == activeCommandMethodsMap ? "null" : activeCommandMethodsMap.keySet() );
         }
         return defaultValue;
 
@@ -635,10 +753,7 @@ public class Spwing implements ApplicationContextAware  {
      * @param <T> The class of the model class
      */
     public <T> void newModel(Class<T> modelClass) {
-        ModelFactory<T> modelFactory = ModelFactory.forModelClass(applicationContext, modelClass);
-        if (Objects.nonNull(modelFactory)) {
-            createModelDocumentScope(modelClass, modelFactory::create);
-        }
+        createModelDocumentScope(modelClass, ModelFactory::create);
     }
 
     /**
@@ -649,12 +764,7 @@ public class Spwing implements ApplicationContextAware  {
      * @param <T> The class of the model class
      */
     public <T> void openModel(Class<T> modelClass) {
-
-        // Get a new model factory for the model, based on the static methods open and create
-        ModelFactory<T> modelFactory = ModelFactory.forModelClass(applicationContext, modelClass);
-        if (Objects.nonNull(modelFactory)) {
-            createModelDocumentScope(modelClass, modelFactory::open);
-        }
+        createModelDocumentScope(modelClass, ModelFactory::open);
     }
 
 
@@ -667,45 +777,104 @@ public class Spwing implements ApplicationContextAware  {
      * @param modelCreator   The supplier for the model
      */
     private void createModelDocumentScope(final Class<?> modelClass,
-                                          final Function<DocumentSession,Object> modelCreator) {
+                                          final BiFunction<ModelFactory<?>,DocumentSession,Object> modelCreator) {
 
-        // Create a new document session
-        DocumentSession documentSession = new DocumentSession( applicationScopeHandlers );
+        UUID activeDocumentBeforeCreation = documentScopeManager.getActiveDocumentID();
+        try {
 
-        // Get a new model factory for the model, based on the static methods open and create
-        Object modelInstance = modelCreator.apply(documentSession);
-        Model model = AnnotatedElementUtils.getMergedAnnotation(modelClass, Model.class);
-        if (Objects.nonNull(modelInstance) && Objects.nonNull(model)) {
+            // Create a new document session
+            DocumentSession documentSession = new DocumentSession( applicationContext, applicationScopeHandlers );
+            UUID documentScopeID = documentScopeManager.establishSession(documentSession);
+            documentSession.setModelClass(modelClass);
 
-            // Create a new document scope for this newly created model object
-            UUID documentScopeID = documentScopeManager.establishSession(documentSession, modelInstance);
-
-            // Get the associated controller. Make sure it's annotated properly. If not, it will
-            // not be properly added to the document scope handler list
-            Object controllerInstance = createControllerForModel(modelClass, model, modelInstance);
-            if (Objects.nonNull(controllerInstance)) {
-                final Class<?> controllerClass = controllerInstance.getClass();
-                Controller controller = AnnotatedElementUtils.getMergedAnnotation(controllerClass, Controller.class);
-                if (Objects.isNull(controller)) {
-                    log.warn("Class {} is not annotated as a controller", controllerClass.getName());
-                }
+            // Attempt to get a model configuration for this model class. This provides a hook for
+            // model specific information. The user does this by creating beans of well known
+            // types or names on the configuration bean. For example, the user can create a
+            // bean with the name "fileExtension" for models that are saved to file based documents,
+            // and the Spwing framework will automatically honor those file extensions. Similarly,
+            // the configuration can create a ModelFactory bean that takes the responsibility of
+            // creating the models. See the ModelConfiguration class for more information
+            ResolvableType modelConfigurationType = ResolvableType.forClassWithGenerics(ModelConfiguration.class, modelClass );
+            String[] beanNames = applicationContext.getBeanNamesForType(modelConfigurationType);
+            if (beanNames.length != 0) {
+                ModelConfiguration<?> modelConfiguration = (ModelConfiguration<?>) applicationContext.getBean(beanNames[0]);
+                documentSession.setModelConfiguration(modelConfiguration);
             }
 
-            try {
-                // Get the view factory associated with the model, and open the view
-                openView(documentScopeID, model.viewFactory());
-            } finally {
+            // Now see if there is a factory defined in the context. If there is a bean in the
+            // configuration of type ModelFactory<T> it will be used rather than building one
+            ModelFactory<?> modelFactory = ModelFactory.forModelClass(applicationContext, modelClass);
 
-                // Have the document session scan for command handlers, listeners, etc.
-                // Do this after the view is created so we can map the listeners attached
-                // to view elements. We do this even if the view failure fails, so that
-                // there are command methods available (Quit, for example)
-                documentSession.scanHandlers(this, commandMethodsScanner);
+            // Get a new model factory for the model, based on the static methods open and create
+            Object modelInstance = modelCreator.apply(modelFactory,documentSession);
+            documentSession.setModel(modelInstance);
 
-                // Rebuild the menu bar, now that we have the controller, etc.
-                rebuildMenubarForDocumentHandlers(documentSession.getAvailableHandlers());
+            // Get the view factory class to use
+            Class<?> viewFactoryClass = applicationContext.containsBean("viewFactoryClass" )
+                    ? applicationContext.getBean("viewFactoryClass").getClass()
+                    : SVWFResourceViewFactory.class;
 
+            // Get the view factory associated with the model, and open the view
+            openView(documentScopeID, documentSession, viewFactoryClass);
+
+            // Get the associated controller.
+            Object controllerInstance = createControllerForModel(documentSession, modelClass, modelInstance);
+            documentSession.setController(controllerInstance);
+
+            // Inject the Swing components into the controller as needed
+            if (null != controllerInstance && null != documentSession.getFrame()) {
+                injectComponentsIntoController(controllerInstance, documentSession.getFrame());
             }
+
+            // Get rid of any undo events that were spuriously created when setting
+            // the initial value of the view elements
+            documentSession.getUndoManager().discardAllEdits();
+
+            // Have the document session scan for command handlers, listeners, etc.
+            // Do this after the view is created so we can map the listeners attached
+            // to view elements. We do this even if the view failure fails, so that
+            // there are command methods available (Quit, for example)
+            documentSession.scanHandlers(this, commandMethodsScanner);
+
+            // Rebuild the menu bar, now that we have the controller, etc.
+            rebuildMenubarForDocumentHandlers(documentSession.getAvailableHandlers());
+        } catch (Exception e) {
+
+            // Something went sideways. Log the error, restore the previous session,
+            // and reset
+            log.warn("Unable to open document", e );
+            documentScopeManager.resetScope(activeDocumentBeforeCreation);
+            DocumentSession restoredSession = documentScopeManager.getActiveSession();
+            if (null != restoredSession) {
+                restoredSession.scanHandlers(this, commandMethodsScanner);
+                rebuildMenubarForDocumentHandlers(restoredSession.getAvailableHandlers());
+            }
+        }
+    }
+
+
+    private void injectComponentsIntoController( final Object controllerInstance,
+                                                 final JFrame frame ) {
+
+        BeanWrapperImpl controllerWrapper = new BeanWrapperImpl(controllerInstance);
+        injectComponent( controllerWrapper, frame );
+    }
+
+    private void injectComponent(final BeanWrapper controller,
+                                 final Component component ) {
+        String name = component.getName();
+        if (null != name && !name.isBlank()) {
+            Class<?> propertyType = controller.getPropertyType(name);
+            if (controller.isWritableProperty(name) &&
+                    null != propertyType &&
+                    propertyType.isAssignableFrom(component.getClass())) {
+                controller.setPropertyValue(name, component);
+            }
+        }
+
+        if (component instanceof Container container) {
+            Arrays.stream(container.getComponents())
+                    .forEach(child -> injectComponent(controller, child));
         }
     }
 
@@ -714,23 +883,33 @@ public class Spwing implements ApplicationContextAware  {
      * Figure out the {@link Controller} associated with this model (if any) and open it.
      *
      * @param modelClass      The class for the model instance
-     * @param model           The {@link Model} annotation
      * @param modelInstance   The model instance
      */
     private Object createControllerForModel(
+            final DocumentSession documentSession,
             final Class<?> modelClass,
-            final Model model,
             final Object modelInstance) {
+
+        // Look for a ControllerFor bean
+        ResolvableType controllerForType = ResolvableType.forClassWithGenerics(ControllerFor.class, modelClass);
+        String[] controllerForBeanNames = applicationContext.getBeanNamesForType(controllerForType);
+        if (controllerForBeanNames.length > 0) {
+
+            if (controllerForBeanNames.length > 1) {
+                log.warn( "Multiple controller beans defined for model class {}, arbitrarily choosing {}",
+                        modelClass.getName(), controllerForBeanNames[0]);
+            }
+            Object controllerBean = applicationContext.getBean(controllerForBeanNames[0]);
+            documentSession.setControllerClass(controllerBean.getClass());
+            return controllerBean;
+        }
 
         // If the model is also the controller (supported for simple and ported applications)
         // then there is no need to create a new controller instance; use the model.
-        if (Objects.nonNull(AnnotatedElementUtils.getMergedAnnotation(modelClass, Controller.class))) {
+        if (null != AnnotatedElementUtils.getMergedAnnotation(modelClass, Controller.class)) {
             // The model is also the controller
+            documentSession.setControllerClass(documentSession.getModelClass());
             return modelInstance;
-        } else if (!Object.class.equals(model.controller())) {
-            // The model annotation denotes a controller class, use that one
-            // Let the application factory create it as needed
-            return applicationContext.getBean(model.controller());
         } else {
             // We need to infer the controller class name from the model name.
             // For the class named XXXModel, look for a controller named XXXController
@@ -740,7 +919,9 @@ public class Spwing implements ApplicationContextAware  {
                 String candidateClassName = truncatedName + "Controller";
 
                 try {
-                    return applicationContext.getBean(Class.forName(candidateClassName));
+                    final Class<?> controllerClass = Class.forName(candidateClassName);
+                    documentSession.setControllerClass(controllerClass);
+                    return applicationContext.getBean(controllerClass);
                 } catch (ClassNotFoundException e) {
                     log.warn( "Tee model class {} did not specify a controller class, and the assumed class {} could not be found",
                             modelClassName, candidateClassName);
@@ -753,14 +934,14 @@ public class Spwing implements ApplicationContextAware  {
 
     /**
      * Create a view by class. This is called following the creation of a model
-     * object if the {@link Model#controller()} value is specified. The class specified
-     * is checked to make sure it has the {@link Controller} annotation on it; if not the
-     * class is ignored.
+     * and controller instances.
      *
      * @param documentScopeID The document scope to add the view to
      * @param viewFactoryClass The view factory class
      */
-    public void openView(UUID documentScopeID, @NonNull Class<?> viewFactoryClass) {
+    public void openView(final UUID documentScopeID,
+                         final DocumentSession documentSession,
+                         final @NonNull Class<?> viewFactoryClass) {
 
         // There should be a bean of the view factory class. (The standard factory classes
         // are marked as services, which is a good idea if defining a new factory class, or
@@ -788,27 +969,44 @@ public class Spwing implements ApplicationContextAware  {
             if (component != null) {
 
                 if (component instanceof JFrame frame) {
-                    setUpFrame(documentScopeID, frame);
+                    setUpFrame(documentScopeID, documentSession, frame);
                 } else {
                     // Build a default JFrame around this component
-                    JFrame frame = new JFrame(applicationConfiguration.getApplicationName());
+                    JFrame frame = new JFrame(getApplicationName());
                     frame.setMinimumSize(new Dimension(200, 100));
 
                     // add the component
                     frame.getContentPane().add(component);
                     frame.pack();
 
-                    setUpFrame(documentScopeID, frame);
+                    setUpFrame(documentScopeID, documentSession, frame);
                 }
             } else {
-                log.error( "Called the build method on {}, but it returned null.", viewFactoryClass.getName());
+                throw new RuntimeException(String.format("Called the build method for %s, but it returned null", viewFactoryClass.getName()));
             }
+        } else {
+            throw new RuntimeException(String.format("View factory %s did not have a build method", viewFactoryClass.getName()));
         }
     }
 
-    private void setUpFrame(UUID documentScopeID, JFrame frame) {
+    /**
+     * Spwing handles the top level frame specially - it is available
+     * as an injectable parameter for Invokers, and we have
+     * window listeners for when window state changes - losing and gaining
+     * focus, etc.
+     *
+     * @param documentScopeID The current scope ID
+     * @param frame The frame
+     */
+    private void setUpFrame(final UUID documentScopeID,
+                            final DocumentSession documentSession,
+                            final JFrame frame) {
+
         // Save the frame in the document scope
-        documentScopeManager.storeBeanInActiveDocumentBeanStore("jFrame", frame);
+        documentSession.setFrame(frame);
+
+        // Set the title
+        frame.setTitle( null != documentSession.getAssociatedFile() ? documentSession.getAssociatedFile().getName() : "Untitled" );
 
         // We add a window listener to the view so we know when it
         // gains or loses focus. We also add our menu bar as the menu bar
@@ -879,30 +1077,56 @@ public class Spwing implements ApplicationContextAware  {
     }
 
 
+    /**
+     * Calle when a user selects a menu item
+     *
+     * @param actionEvent The action event
+     * @param menuItem The menu item
+     * @param menuID The menu ID
+     */
     public void menuItemSelected(ActionEvent actionEvent, JMenuItem menuItem, String menuID) {
         log.debug("User selected menu item {} (command ID {})", menuItem.getText(), menuID);
-        fireCommand(menuID, actionEvent);
+        fireCommand(menuID, ParameterResolution.forClass(ActionEvent.class, actionEvent));
     }
 
-    public void aboutToDisplayMenu(String menuID, JMenu menu, Map<String,JMenuItem> mappedMenuItems) {
+
+    /**
+     * Called when a menu is about to be displayed. Used to update
+     * the enable/disable state of menu items in the menu. The menu
+     * item map passed in is the menu items for the menu being displayed.
+     *
+     * @param mappedMenuItems The menu items
+     */
+    public void aboutToDisplayMenu(Map<String,JMenuItem> mappedMenuItems) {
 
         // Enable all the menu items in this menu that have
         // active command methods; disable the others. For those that
         // have active command methods, delegate the enablement
         Map<String,CommandMethods> activeCommandMethodsMap = getActiveCommandMethodsMap();
-        mappedMenuItems.forEach( (commandID, menuItem ) -> {
-            if (activeCommandMethodsMap.containsKey(commandID)) {
-                activeCommandMethodsMap.get(commandID).doEnable(menuItem::setEnabled);
-            } else {
-                menuItem.setEnabled(false);
-            }
-        });
+        mappedMenuItems.forEach(
+                (commandID, menuItem ) -> menuItem.setEnabled(
+                        activeCommandMethodsMap.containsKey(commandID) &&
+                        activeCommandMethodsMap.get(commandID).isEnabled(menuItem)));
     }
 
+
+    /**
+     * Stub functionality for dynamic menus. Not implemented yet
+     *
+     * @param menuID The menu ID
+     * @param menu The menu
+     */
     public void populateMenu(String menuID, JMenu menu) {
         log.info("Need to populate dynamic menu {}, name {}", menuID, menu.getText());
     }
 
+
+    /**
+     * Can be called to post an error dialog to the user.
+     *
+     * @param key The message key
+     * @param arguments The arguments to the message
+     */
     public void postErrorDialog(String key, Object... arguments) {
         String messageKey = String.format("%s_msg", key);
         String titleKey = String.format("%s_title", key);

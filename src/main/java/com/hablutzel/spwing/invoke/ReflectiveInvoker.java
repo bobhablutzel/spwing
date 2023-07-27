@@ -29,11 +29,14 @@ import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.annotation.SynthesizingMethodParameter;
 
-import java.lang.reflect.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 /**
@@ -85,37 +88,24 @@ public class ReflectiveInvoker extends Invoker {
         executable.setAccessible(true);
     }
 
-    /**
-     * Find and invoke a method on the target class. The method
-     * is expected to return void and needs no specialized parameter suppliers.
-     * This is equivalent to calling {@link #invoke(ApplicationContext, Object, String, Class, Object, Map)}
-     * with Void.TYPE and Map.of()
-     * @param applicationContext The application context
-     * @param target The target object
-     * @param methodName The method name
-     */
-    public static void invoke(final ApplicationContext applicationContext,
-                              final Object target,
-                              final String methodName ) {
-        invoke(applicationContext, target, methodName, Map.of() );
-    }
 
     /**
      * Find and invoke a method on the target class. The caller
      * supplies a set of additional parameter suppliers that can be
      * used to provide specialized class instances to the caller.
      * The return type is expected to be void. This is equivalent
-     * to calling {@link #invoke(ApplicationContext, Object, String, Class, Object, Map)}
+     * to calling {@link #invoke(ApplicationContext, Object, String, Function[])}
      * with Void.TYPE
      * @param applicationContext The application context
      * @param target The target object
      * @param methodName The method name
      * @param parameterSuppliers A map of class names to parameter suppliers
      */
+    @SafeVarargs
     public static void invoke(final ApplicationContext applicationContext,
                               final Object target,
                               final String methodName,
-                              final Map<Class<?>, Supplier<Object>> parameterSuppliers) {
+                              final Function<ParameterDescription,ParameterResolution>... parameterSuppliers) {
         invoke(applicationContext, target, methodName, Void.TYPE, null, parameterSuppliers );
     }
 
@@ -136,12 +126,13 @@ public class ReflectiveInvoker extends Invoker {
      * @return The resulting value
      * @param <T> The result type
      */
+    @SafeVarargs
     public static <T> T invoke(final ApplicationContext applicationContext,
                                final Object target,
                                final String methodName,
                                final Class<T> clazz,
                                final T defaultValue,
-                               final Map<Class<?>, Supplier<Object>> parameterSuppliers) {
+                               final Function<ParameterDescription,ParameterResolution>... parameterSuppliers) {
 
         // Create a holder for our result with the default value. This value will be
         // returned if no matching method is found.
@@ -163,7 +154,7 @@ public class ReflectiveInvoker extends Invoker {
                     ReflectiveInvoker reflectiveInvoker = new ReflectiveInvoker(applicationContext, target, method );
 
                     // Add any overriding parameter suppliers
-                    parameterSuppliers.forEach(reflectiveInvoker::registerParameterSupplier);
+                    Arrays.stream(parameterSuppliers).forEach(reflectiveInvoker::registerParameterResolver);
 
                     // Invoke with the allowable results
                     AllowedResult<T> allowedResult = new AllowedResult<>(clazz, resultHolder::set);
@@ -240,7 +231,9 @@ public class ReflectiveInvoker extends Invoker {
 
     @Override
     public String toString() {
-        return String.format( "invoke[%s.%s]", target.getClass().getName(), executable.getName());
+        return String.format( "invoke[%s.%s]",
+                null != target ? target.getClass().getName() : "[static]",
+                executable.getName());
     }
 
 }

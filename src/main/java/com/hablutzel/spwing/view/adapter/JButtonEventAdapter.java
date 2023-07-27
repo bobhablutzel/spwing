@@ -16,24 +16,32 @@
 
 package com.hablutzel.spwing.view.adapter;
 
-import javax.swing.JButton;
-import java.awt.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
+import javax.swing.*;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
 public class JButtonEventAdapter extends AbstractButtonEventAdapter {
 
     private final JButton button;
-    public JButtonEventAdapter(JButton button) {
-        super(button);
+    public JButtonEventAdapter(final JButton button,
+                               final Spwing spwing) {
+        super(button, spwing);
         this.button = button;
     }
 
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JButton.class, () -> button, Boolean.class, button::isSelected);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JButton.class, button));
+        result.add(ParameterResolution.forClass(Boolean.class, button.isSelected()));
+        return result;
     }
 
 }

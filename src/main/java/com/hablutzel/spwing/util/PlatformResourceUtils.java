@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SystemUtils;
 import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -107,23 +105,11 @@ public class PlatformResourceUtils {
     }
 
     public static boolean hasMajorVersion() {
-        return Objects.nonNull(OS_MAJOR_VERSION);
+        return null != OS_MAJOR_VERSION;
     }
 
     public static String withPlatformOnly(String baseName) {
         return String.format("%s_%s", baseName, OS_NAME);
-    }
-
-
-    public static List<String> platformNames(String baseName) {
-        if (hasMajorVersion()) {
-            return List.of( withPlatformAndFullVersion(baseName),
-                    withPlatformAndMajorVersion(baseName),
-                    withPlatformOnly(baseName));
-        } else {
-            return List.of( withPlatformAndFullVersion(baseName),
-                    withPlatformOnly(baseName));
-        }
     }
 
 

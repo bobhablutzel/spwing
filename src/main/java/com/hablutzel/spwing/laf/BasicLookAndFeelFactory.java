@@ -38,8 +38,8 @@ public class BasicLookAndFeelFactory implements LookAndFeelFactory {
 
     public LookAndFeel buildLookAndFeel(String lookAndFeelClassName) {
         try {
-            Class<?> flatMacClass = Class.forName(lookAndFeelClassName);
-            Object instance = flatMacClass.getDeclaredConstructor().newInstance();
+            Class<?> lafClass = Class.forName(lookAndFeelClassName);
+            Object instance = lafClass.getDeclaredConstructor().newInstance();
             if (instance instanceof LookAndFeel lookAndFeel) {
                 log.debug( "Look and feel used: {}", lookAndFeel);
                 return lookAndFeel;

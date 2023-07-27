@@ -199,7 +199,6 @@ package com.hablutzel.spwingDemo;
 
 
 import com.hablutzel.spwing.annotations.Model;
-import com.hablutzel.spwing.model.BaseModel;
 import lombok.Getter;
 
 import java.io.Serial;

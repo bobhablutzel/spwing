@@ -30,8 +30,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-
-import java.util.Objects;
+import org.springframework.lang.NonNull;
 
 
 /**
@@ -47,7 +46,7 @@ import java.util.Objects;
  */
 @Slf4j
 @RequiredArgsConstructor
-public class KnownObjectsInjector implements BeanPostProcessor {
+public class DocumentElementPostBeanProcessor implements BeanPostProcessor {
 
     private final DocumentScopeManager documentScopeManager;
 
@@ -63,14 +62,14 @@ public class KnownObjectsInjector implements BeanPostProcessor {
      * @throws BeansException A bean exception (if anything happens)
      */
     @Override
-    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+    public Object postProcessAfterInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
 
         if (bean instanceof SpwingAware spwingAware) {
             spwingAware.setUi(spwing);
         }
 
         DocumentEventDispatcher documentEventDispatcher = documentScopeManager.getDocumentEventDispatcher();
-        if (Objects.nonNull(documentEventDispatcher)) {
+        if (null != documentEventDispatcher) {
             if (bean instanceof DocumentEventDispatcherAware documentEventDispatcherAware) {
                 documentEventDispatcherAware.setDocumentEventDispatcher(documentEventDispatcher);
             }

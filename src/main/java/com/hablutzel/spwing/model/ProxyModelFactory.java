@@ -18,6 +18,7 @@ package com.hablutzel.spwing.model;
 
 import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.util.FileChooserUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,7 @@ import org.springframework.context.ApplicationContext;
 
 import javax.swing.*;
 import java.io.File;
-import java.util.Objects;
+import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -34,51 +35,58 @@ class ProxyModelFactory<T> extends ModelFactory<T> {
     private final ApplicationContext applicationContext;
     private final Invoker open;
     private final Invoker createMethod;
-    private final boolean openTakesAFile;
+    private final List<String> fileExtensions;
 
     @Override
     public T open(DocumentSession documentSession) {
 
-        if (openTakesAFile) {
+        if (!fileExtensions.isEmpty()) {
             File modelFile = promptUserForFile();
-            if (Objects.nonNull(modelFile)) {
 
-                // Associate this file with document session
-                documentSession.setAssociatedFile(modelFile);
+            // Associate this file with document session
+            documentSession.setAssociatedFile(modelFile);
 
-                // We're about to invoke the open method, register the parameter supplier for the file
-                open.registerParameterSupplier(File.class, () -> modelFile);
+            // We're about to invoke the open method, register the parameter supplier for the file
+            open.registerParameterResolver(ParameterResolution.forClass(File.class, modelFile));
 
-                // Invoke the open method and return the result
-                return open.invoke(modelClass);
-            } else {
-                return null;
-            }
+            // Invoke the open method and return the result
+            T theModelObject = open.invoke(modelClass);
+            documentSession.addBeanToScope(modelClass, theModelObject);
+            return theModelObject;
         } else {
             return open.invoke(modelClass);
         }
     }
 
+
+    /**
+     * For file based models (i.e. those that define a "fileExtension" bean
+     * in their configuration instance), prompt the user for a file of the
+     * appropriate type. Return that file; throw a runtime exception if the
+     * user cancels the operation
+     *
+     * @return The file to open
+     */
     private File promptUserForFile() {
         JFileChooser fileChooser = new JFileChooser();
 
         // Get the FileChooserUtils service and apply the file filters from the
         // model class.
         FileChooserUtils fileChooserUtils = applicationContext.getBean(FileChooserUtils.class);
-        fileChooserUtils.buildFileFiltersForModelClass(fileChooser, modelClass);
+        fileChooserUtils.buildFileExtensionFilters(fileChooser, fileExtensions);
 
         // Prompt the user file a file
         if (fileChooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
             return fileChooser.getSelectedFile();
         } else {
             log.debug("Cancelling open because user did not approve the open");
-            return null;
+            throw new RuntimeException("User cancelled open" );
         }
     }
 
     @Override
     public T create(DocumentSession documentSession) {
-        if (Objects.nonNull(createMethod)) {
+        if (null != createMethod) {
             return createMethod.invoke(modelClass);
         } else {
             log.error("static create method not defined for class {}", modelClass.getName());

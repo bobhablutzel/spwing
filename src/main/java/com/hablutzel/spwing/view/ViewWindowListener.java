@@ -18,6 +18,7 @@ package com.hablutzel.spwing.view;
 
 import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.context.DocumentScopeManager;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.util.BeanUtils;
 import com.hablutzel.spwing.util.WindowUtils;
 import lombok.Getter;
@@ -26,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 
 import javax.swing.*;
+import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.UUID;
@@ -60,7 +62,9 @@ public class ViewWindowListener extends WindowAdapter {
     @Override
     public void windowClosing(WindowEvent e) {
         log.debug("User clicked close button for window {}", WindowUtils.getWindowTitle(e.getWindow()));
-        spwing.fireCommand("cmdClose", e.getWindow());
+        spwing.fireCommand("cmdClose",
+                ParameterResolution.forClass(Window.class, e.getWindow()),
+                ParameterResolution.forClass(WindowEvent.class, e));
     }
 
 }

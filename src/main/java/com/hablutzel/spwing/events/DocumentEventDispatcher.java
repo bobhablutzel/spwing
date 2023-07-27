@@ -18,14 +18,18 @@ package com.hablutzel.spwing.events;
 
 
 import com.hablutzel.spwing.context.DocumentScopeManager;
-import com.hablutzel.spwing.context.EventAdapter;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+import com.hablutzel.spwing.view.adapter.EventAdapter;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 public class DocumentEventDispatcher {
@@ -43,9 +47,11 @@ public class DocumentEventDispatcher {
 
     @EventListener
     public void handle(DocumentEvent documentEvent) {
+
+        // If we have a consumer for the event, dispatch it
         if (consumerMap.containsKey(documentEvent.getEventName())) {
             consumerMap.get(documentEvent.getEventName()).forEach(invoker -> {
-                invoker.registerParameterSupplier(DocumentEvent.class, () -> documentEvent);
+                invoker.registerParameterResolver(ParameterResolution.forClass(DocumentEvent.class, documentEvent));
                 invoker.invoke();
             });
         }

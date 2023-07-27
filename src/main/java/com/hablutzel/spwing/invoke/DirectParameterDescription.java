@@ -18,6 +18,7 @@ package com.hablutzel.spwing.invoke;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ResolvableType;
 
 import java.lang.annotation.Annotation;
 
@@ -28,7 +29,7 @@ public class DirectParameterDescription implements ParameterDescription {
     private final String name;
 
     @Getter
-    private final Class<?> type;
+    private final ResolvableType type;
 
     @Getter
     private final boolean varArgs;
@@ -38,6 +39,15 @@ public class DirectParameterDescription implements ParameterDescription {
 
     @Getter
     private final boolean optional;
+
+    public DirectParameterDescription(
+            final String name,
+            final Class<?> clazz,
+            final boolean varArgs,
+            final int index,
+            final boolean optional) {
+        this(name, ResolvableType.forClass(clazz), varArgs, index, optional );
+    }
 
     @Override
     public boolean hasParameterAnnotation(Class<? extends Annotation> clazz) {

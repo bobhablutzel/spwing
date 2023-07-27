@@ -49,6 +49,11 @@ public abstract class Accessor {
      */
     public abstract void set(Object value);
 
+    /**
+     * Returns TRUE if this accessor can provide the target class
+     * @param targetClass The desired class
+     * @return TRUE if this can supply that class
+     */
     public abstract boolean canSupply(Class<?> targetClass);
 
 

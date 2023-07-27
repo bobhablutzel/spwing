@@ -16,13 +16,12 @@
 
 package com.hablutzel.spwing.util;
 
-import com.hablutzel.spwing.annotations.Model;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceAware;
-import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Service;
 
 import javax.swing.*;
@@ -30,8 +29,9 @@ import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 
 @Slf4j
@@ -43,21 +43,35 @@ public class FileChooserUtils implements MessageSourceAware {
     @Setter
     private MessageSource messageSource;
 
-    public void buildFileFiltersForModel(JFileChooser fileChooser, Object modelClass ) {
-        buildFileFiltersForModelClass(fileChooser, modelClass.getClass());
+    /**
+     * If the model can be saved to a file, the document should create a
+     * bean named "fileExtension" in the {@link com.hablutzel.spwing.model.ModelConfiguration}
+     * instance (or other configuration element). This routine looks for that
+     * bean, and returns the value of that bean as a List&lt;String&gt;
+     *
+     * @param applicationContext The {@link ApplicationContext}
+     * @return The list of extensions
+     */
+    public static List<String> getActiveFileExtensions(final ApplicationContext applicationContext) {
+        if (applicationContext.containsBean("fileExtension")) {
+            Object fileExtensionBean = applicationContext.getBean("fileExtension" );
+            if (fileExtensionBean instanceof Collection<?> collection) {
+                return collection.stream().map(Object::toString).toList();
+            } else {
+                return List.of( fileExtensionBean.toString() );
+            }
+        }
+        return List.of();
     }
 
 
-    public void buildFileFiltersForModelClass(JFileChooser fileChooser, Class<?> modelClass) {
-        Model model = AnnotatedElementUtils.getMergedAnnotation(modelClass, Model.class);
-        if (Objects.nonNull(model) && Objects.nonNull(model.extensions()) && model.extensions().length != 0) {
+    public void buildFileExtensionFilters(final JFileChooser fileChooser,
+                                          final List<String> fileExtensions) {
+        FileFilter[] fileFilters = fileExtensions.stream()
+                .map(this::buildFileFilterForExtension)
+                .toArray(FileFilter[]::new);
 
-            FileFilter[] fileFilters = Arrays.stream(model.extensions())
-                    .map(this::buildFileFilterForExtension)
-                    .toArray(FileFilter[]::new);
-
-            applyFileFilters(fileChooser, fileFilters);
-        }
+        applyFileFilters(fileChooser, fileFilters);
     }
 
 

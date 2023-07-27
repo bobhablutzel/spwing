@@ -20,6 +20,7 @@ import com.hablutzel.spwing.invoke.DirectInvoker;
 import com.hablutzel.spwing.invoke.DirectParameterDescription;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.ResolvableType;
 
 import java.util.List;
 
@@ -29,8 +30,22 @@ public abstract class DocumentEventInvoker extends DirectInvoker {
 
     public DocumentEventInvoker(ApplicationContext applicationContext) {
         super(applicationContext, "listener", List.of(
-                new DirectParameterDescription("e", DocumentEvent.class, false, 0, false )
+                new DirectParameterDescription("e",
+                        ResolvableType.forClass(DocumentEvent.class),
+                        false,
+                        0,
+                        false )
         ));
+    }
+
+    public static DocumentEventInvoker from( final ApplicationContext applicationContext,
+                                             final Runnable runnable) {
+        return new DocumentEventInvoker(applicationContext) {
+            @Override
+            protected void handleDocumentEvent(DocumentEvent documentEvent) {
+                runnable.run();
+            }
+        };
     }
 
     @Override

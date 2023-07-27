@@ -10,8 +10,12 @@
     ]
   },
   { "id" : "m_Edit", "items" :  [
+    { "id":  "cmdUndo", "accelerator":  "meta Z"},
+    { "id":  "cmdRedo", "accelerator":  "meta shift Z"},
+    {},
     { "id":  "cmdCut", "accelerator": "meta C" },
     { "id":  "cmdCopy", "accelerator": "meta X" },
     { "id":  "cmdPaste", "accelerator": "meta V" }
   ]}
 ]
+

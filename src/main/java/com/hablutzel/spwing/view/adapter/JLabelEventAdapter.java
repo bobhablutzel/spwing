@@ -16,23 +16,31 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
 import javax.swing.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
 public class JLabelEventAdapter extends JComponentEventAdapter {
 
     private final JLabel label;
 
-    public JLabelEventAdapter(JLabel label) {
-        super(label);
+    public JLabelEventAdapter(final JLabel label,
+                              final Spwing spwing) {
+        super(label, spwing);
         this.label = label;
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JLabel.class, () -> label);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JLabel.class,label));
+        return result;
     }
 
 

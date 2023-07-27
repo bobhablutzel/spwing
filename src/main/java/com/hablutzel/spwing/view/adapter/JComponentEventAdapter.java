@@ -16,15 +16,18 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 @Slf4j
@@ -35,8 +38,9 @@ public class JComponentEventAdapter extends ContainerEventAdapter {
 
     private final JComponent component;
 
-    public JComponentEventAdapter(JComponent component) {
-        super(component);
+    public JComponentEventAdapter(final JComponent component,
+                                  final Spwing spwing) {
+        super(component, spwing);
         this.component = component;
     }
 
@@ -77,8 +81,10 @@ public class JComponentEventAdapter extends ContainerEventAdapter {
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JComponent.class, () -> component);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription,ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JComponent.class, component));
+        return result;
     }
 
 

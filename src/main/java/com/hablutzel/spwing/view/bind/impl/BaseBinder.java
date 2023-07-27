@@ -15,22 +15,21 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.watch;
+package com.hablutzel.spwing.view.bind.impl;
 
-import com.hablutzel.spwing.events.DocumentEvent;
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.events.DocumentEventInvoker;
 import com.hablutzel.spwing.view.bind.Accessor;
 import com.hablutzel.spwing.view.bind.Binder;
 import com.hablutzel.spwing.view.bind.PropertyAccessor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.lang.NonNull;
 
 import java.util.List;
-import java.util.Objects;
 
+
+@Slf4j
 public abstract class BaseBinder implements Binder {
 
     @Override
@@ -38,12 +37,15 @@ public abstract class BaseBinder implements Binder {
                      @NonNull final String propertyName,
                      @NonNull final Object targetObjectValue,
                      @NonNull final Accessor authoritativeValueAccessor,
-                     @NonNull final List<String> triggers,
+                     @NonNull final List<RefreshTrigger> triggers,
                      @NonNull final ApplicationContext applicationContext) {
 
+        // Get the refresh triggers
         this.bindValueToControl(wrappedTargetObject, propertyName, authoritativeValueAccessor, triggers, applicationContext);
         checkForSuspiciousConditions(wrappedTargetObject, propertyName, authoritativeValueAccessor);
     }
+
+
 
 
     protected void checkForSuspiciousConditions(@NonNull final BeanWrapper wrappedTargetObject,
@@ -55,7 +57,7 @@ public abstract class BaseBinder implements Binder {
     public void bindValueToControl(@NonNull final BeanWrapper viewObjectBeanWrapper,
                                    @NonNull final String viewObjectProperty,
                                    @NonNull final Accessor authoritativeValue,
-                                   @NonNull final List<String> triggers,
+                                   @NonNull final List<RefreshTrigger> triggers,
                                    @NonNull final ApplicationContext applicationContext) {
 
         // Get the conversion service
@@ -71,7 +73,7 @@ public abstract class BaseBinder implements Binder {
             if (authoritativeValue.canSupply(viewPropertyType)) {
 
                 // Get a consumer for writing to this property, and bind it to the accessor
-                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, viewPropertyType, applicationContext);
+                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, applicationContext);
 
             }
         }
@@ -94,33 +96,21 @@ public abstract class BaseBinder implements Binder {
      * @param triggers The trigger list for re-evaluating the accessor
      * @param expectedClass      The expected type being accessed.
      */
-    private void bindWithRefresh(final Accessor viewPropertyAccessor,
+    protected void bindWithRefresh(final Accessor viewPropertyAccessor,
                                  final Accessor authoritativeAccessor,
-                                 final List<String> triggers,
-                                 final Class<?> expectedClass,
+                                 final List<RefreshTrigger> triggers,
                                  final ApplicationContext applicationContext) {
 
-        // Get the document event dispatcher
-        DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
 
         // Set the value
-        Object authoriativeValue = authoritativeAccessor.get();
-        viewPropertyAccessor.set(authoriativeValue);
+        Object initialAuthoritativeValue = authoritativeAccessor.get();
+        viewPropertyAccessor.set(initialAuthoritativeValue);
 
-        // If there are triggers for update, then add a listener for each
-        if (Objects.nonNull(triggers)) {
-            triggers.forEach(trigger -> documentEventDispatcher.registerListener(trigger, new DocumentEventInvoker(applicationContext) {
-                @Override
-                protected void handleDocumentEvent(DocumentEvent documentEvent) {
-
-                    // Get the new value, make sure we aren't setting it to the existing value to avoid loops
-                    Object newValue = authoritativeAccessor.get();
-                    if (!viewPropertyAccessor.get().equals(newValue)) {
-                        viewPropertyAccessor.set(newValue);
-                    }
-                }
-            }));
-        }
+        triggers.forEach( refreshTrigger -> refreshTrigger.onRefresh( () -> {
+            Object newValue = authoritativeAccessor.get();
+            if (!viewPropertyAccessor.get().equals(newValue)) {
+                viewPropertyAccessor.set(newValue);
+            }
+        } ));
     }
-
 }

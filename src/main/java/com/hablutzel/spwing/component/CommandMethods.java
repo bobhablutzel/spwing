@@ -17,32 +17,52 @@
 package com.hablutzel.spwing.component;
 
 import com.hablutzel.spwing.invoke.Invoker;
-import com.hablutzel.spwing.util.ResultHolder;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.swing.*;
 import java.util.Arrays;
-import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
+
+/**
+ * The {@link CommandMethods} class is used to encapsulate the
+ * {@link Invoker} instances that enable and handle commands.
+ *
+ * @author Bob Hablutzel
+ */
 @Slf4j
 @ToString
 public class CommandMethods {
 
+    /**
+     * The handler invoker. This is called to process the command
+     */
     @Setter
     private Invoker handler;
 
+    /**
+     * The (potentially null) enabler invoker, used to enable the command if present.
+     */
     @Setter
     private Invoker enabler;
 
 
-
-    public void doEnable(Consumer<Boolean> setEnabled ) {
-        if (Objects.isNull(enabler)) {
-            setEnabled.accept(Objects.nonNull(handler));
+    /**
+     * Commands are enabled if (a) they have an enabler, and the
+     * enabler returns true, or (b) they do not have an enabler but
+     * do have a handler.
+     * @return TRUE for enabled commands.
+     */
+    public boolean isEnabled(final JMenuItem menuItem) {
+        if (null != enabler) {
+            enabler.registerParameterResolver(ParameterResolution.forClass(JMenuItem.class, menuItem));
+            return enabler.invoke(Boolean.class);
         } else {
-            setEnabled.accept(enabler.invoke(Boolean.class));
+            return null != handler;
         }
     }
 
@@ -53,22 +73,15 @@ public class CommandMethods {
      * @param defaultValue The default value to return
      * @param injectedValues Values that can be injected into the invocation context
      */
-    public <T> T fireCommandWithResult(Class<T> clazz, T defaultValue, Object... injectedValues) {
-
-        ResultHolder<T> result = new ResultHolder<>(defaultValue);
-
-        Invoker.AllowedResult<?> [] allowedResults = {
-                new Invoker.AllowedResult<>(clazz, result::set)
-        };
+    public <T> T fireCommandWithResult(final Class<T> clazz,
+                                       final T defaultValue,
+                                       final Function<ParameterDescription, ParameterResolution>... injectedValues) {
 
         // Allow the injected values to be used as a parameter to handler methods (might be none)
-        Arrays.stream(injectedValues)
-                .filter(Objects::nonNull)
-                .forEach( o ->  handler.registerParameterSupplier(o.getClass(), () -> o));
+        Arrays.stream(injectedValues).forEach(handler::registerParameterResolver);
 
-        // Invoke the method
-        handler.invoke( allowedResults );
-
-        return result.get();
+        // Invoke the method, and return the result or default if null.
+        T result = handler.invoke(clazz);
+        return null != result ? result : defaultValue;
     }
 }

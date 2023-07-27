@@ -17,10 +17,10 @@
 package com.hablutzel.spwing.view.factory.reflective;
 
 import com.hablutzel.spwing.Spwing;
-import com.hablutzel.spwing.annotations.Model;
 import com.hablutzel.spwing.annotations.Controller;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.view.factory.ComponentFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +46,7 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
+@SuppressWarnings("unused")
 public class ReflectiveViewFactory {
 
     /**
@@ -57,7 +58,6 @@ public class ReflectiveViewFactory {
     public String targetMethodName() { return "buildSwingComponents"; }
 
     public Component build(final Spwing spwing,
-                           final @Model Object model,
                            final @Controller Object controller,
                            final DocumentEventDispatcher documentEventDispatcher,
                            final ConversionService conversionService) {
@@ -66,9 +66,9 @@ public class ReflectiveViewFactory {
                 .filter(method -> method.getName().equals(targetMethodName()))
                 .findFirst();
         if (methodOptional.isPresent()) {
-            ComponentFactory componentFactory = new ComponentFactory(model, controller, documentEventDispatcher, new HashMap<>());
+            ComponentFactory componentFactory = new ComponentFactory(spwing, documentEventDispatcher, new HashMap<>());
             Invoker invoker = new ReflectiveInvoker(spwing.getApplicationContext(), controller, methodOptional.get());
-            invoker.registerParameterSupplier(ComponentFactory.class, () -> componentFactory);
+            invoker.registerParameterResolver(ParameterResolution.forClass(ComponentFactory.class, componentFactory));
             return invoker.invoke(Component.class);
         } else {
             log.warn("ReflectiveViewFactory could not find {} method", targetMethodName());

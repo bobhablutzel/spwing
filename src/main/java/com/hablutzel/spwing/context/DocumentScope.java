@@ -16,8 +16,6 @@
 
 package com.hablutzel.spwing.context;
 
-import com.hablutzel.spwing.annotations.Model;
-import com.hablutzel.spwing.annotations.Controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectFactory;
@@ -31,8 +29,7 @@ import org.springframework.lang.NonNull;
  * in a web framework). With this scope, there is a scope
  * associated with each "document" that the framework is
  * manipulating; the scope generally contains at least
- * a {@link Controller} and
- * {@link Model} instance, but could have any number of beans
+ * a model and controller, but could have any number of beans
  * that are marked with "document" scope.
  *
  * @author Bob Hablutzel
@@ -62,12 +59,8 @@ public class DocumentScope implements Scope {
 
         // Check for the bean in the active document scope. If not found
         // then we have to create, store, and return it.
-        return documentScopeManager.getBeanFromActiveDocumentBeanStore(name, () -> {
-            // Create, stamp, and return the new object.
-            Object newBean = objectFactory.getObject();
-            log.debug( "Created a {} in document scope", newBean.getClass().getName());
-            return newBean;
-        });
+        // Create, stamp, and return the new object.
+        return documentScopeManager.getBeanFromActiveDocumentBeanStore(name, objectFactory::getObject);
     }
 
     /**

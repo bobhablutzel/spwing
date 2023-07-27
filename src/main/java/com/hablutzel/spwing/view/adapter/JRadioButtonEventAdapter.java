@@ -16,23 +16,32 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
 import javax.swing.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
 public final class JRadioButtonEventAdapter extends AbstractButtonEventAdapter {
 
     private final JRadioButton radioButton;
 
-    public JRadioButtonEventAdapter(JRadioButton radioButton) {
-        super(radioButton);
+    public JRadioButtonEventAdapter(final JRadioButton radioButton,
+                                    final Spwing spwing) {
+        super(radioButton, spwing);
         this.radioButton = radioButton;
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JRadioButton.class, () -> radioButton, Boolean.class, radioButton::isSelected);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JRadioButton.class, radioButton));
+        result.add(ParameterResolution.forClass(Boolean.class, radioButton.isSelected()));
+        return result;
     }
 
 }

@@ -16,12 +16,14 @@
 
 package com.hablutzel.spwing.invoke;
 
+import org.springframework.core.ResolvableType;
+
 import java.lang.annotation.Annotation;
 
 public interface ParameterDescription {
 
     String getName();
-    Class<?> getType();
+    ResolvableType getType();
     boolean isVarArgs();
     int getIndex();
     boolean isOptional();

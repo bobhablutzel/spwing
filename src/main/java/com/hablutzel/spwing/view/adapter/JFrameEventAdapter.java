@@ -16,23 +16,31 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
 import javax.swing.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
 public class JFrameEventAdapter extends FrameEventAdapter {
 
     private final JFrame frame;
 
-    public JFrameEventAdapter(JFrame frame) {
-        super(frame);
+    public JFrameEventAdapter(final JFrame frame,
+                              final Spwing spwing) {
+        super(frame, spwing);
         this.frame = frame;
 
     }
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JFrame.class, () -> frame);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JFrame.class, frame));
+        return result;
     }
 
 

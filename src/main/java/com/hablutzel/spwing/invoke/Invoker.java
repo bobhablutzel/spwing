@@ -22,24 +22,40 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.core.ResolvableType;
 
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 
 @Slf4j
 @RequiredArgsConstructor
 public abstract class Invoker {
+
+    private final static Map<Class<?>, ResolvableType> PRIMITIVE_MAP = Map.of(
+            Boolean.TYPE, ResolvableType.forClass(Boolean.class),
+            Byte.TYPE, ResolvableType.forClass(Byte.class),
+            Character.TYPE, ResolvableType.forClass(Character.class),
+            Float.TYPE, ResolvableType.forClass(Float.class),
+            Integer.TYPE, ResolvableType.forClass(Integer.class),
+            Long.TYPE, ResolvableType.forClass(Long.class),
+            Short.TYPE, ResolvableType.forClass(Short.class),
+            Double.TYPE, ResolvableType.forClass(Double.TYPE)
+    );
 
     /**
      * {@link Invoker} is designed to be as independent of framework (other than
@@ -49,7 +65,7 @@ public abstract class Invoker {
      *
      * @see #registerFrameworkAdapter(Function)
      */
-    private static Function<ParameterDescription, Object> frameworkAdapter = null;
+    private static Function<ParameterDescription, ParameterResolution> frameworkAdapter = null;
     /**
      * When invoking the method, if a parameter cannot be resolved it is added
      * to this list. The list must be empty for the invocation to continue.
@@ -63,22 +79,21 @@ public abstract class Invoker {
      * instances are a good example of this case, but it is also used
      * for some framework internal classes
      */
-    private final Map<Class<?>, Supplier<?>> parameterSupplierMap = new HashMap<>();
+    private final Set<Function<ParameterDescription,ParameterResolution>> parameterSuppliers = new HashSet<>();
     /**
      * The resolvers we use to attempt to find an argument for a parameter.
      */
-    private final List<Function<ParameterDescription, Object>> resolvers = List.of(
+    private final List<Function<ParameterDescription, ParameterResolution>> resolvers = List.of(
             this::beanFromFramework,
             this::beanFromValue,
-            this::beanByNameAndType,
             this::beanByType,
             this::beanFromSupplier
     );
 
     @Setter
-    private boolean throwOnInvalidParameter = false;
+    private boolean throwOnInvalidParameter = true;
 
-    public static void registerFrameworkAdapter(Function<ParameterDescription, Object> adapter) {
+    public static void registerFrameworkAdapter(Function<ParameterDescription, ParameterResolution> adapter) {
         Invoker.frameworkAdapter = adapter;
     }
 
@@ -90,26 +105,27 @@ public abstract class Invoker {
      * If desired, the caller can register new supplies <i>before</i> invoking the
      * method.
      *
-     * @param clazz             The class that will be supplied
-     * @param parameterSupplier The supplier
-     * @see #invoke(AllowedResult[])
-     * @see #invoke(Class)
-     * @see #invoke(Consumer, AllowedResult[])
+     * @param parameterSupplier A function that returns a {@link ParameterResolution} for a
+     *                          given {@link ParameterDescription}. 
+     * @see #beanFromSupplier(ParameterDescription) 
      */
-    public void registerParameterSupplier(Class<?> clazz, Supplier<Object> parameterSupplier) {
-        parameterSupplierMap.put(mapPrimitive(clazz), parameterSupplier);
+    public void registerParameterResolver(Function<ParameterDescription, ParameterResolution> parameterSupplier) {
+        parameterSuppliers.add(parameterSupplier);
     }
+
 
     /**
-     * Register the built-in suppliers - known entities in the framework
+     * Register the built-in resolvers - known entities in the framework
      */
-    protected void registerBuildInParameterSuppliers() {
-        registerParameterSupplier(ApplicationContext.class, () -> context);
+    protected void registerBuildInParameterResolvers() {
+        registerParameterResolver(ParameterResolution.forClass(ApplicationContext.class, context));
     }
 
 
-    private Object beanFromFramework(ParameterDescription parameterDescription) {
-        return Objects.nonNull(frameworkAdapter) ? frameworkAdapter.apply(parameterDescription) : null;
+    private ParameterResolution beanFromFramework(ParameterDescription parameterDescription) {
+        return null != frameworkAdapter
+                ? frameworkAdapter.apply(parameterDescription)
+                : ParameterResolution.unresolved();
     }
 
     /**
@@ -122,7 +138,7 @@ public abstract class Invoker {
      * expression is invalid
      * @see FlexpressionParser
      */
-    private Object beanFromValue(ParameterDescription parameterDescription) {
+    private ParameterResolution beanFromValue(ParameterDescription parameterDescription) {
         if (parameterDescription.getParameterAnnotation(Value.class) instanceof Value value) {
 
             // Get the expression text from the value, and attempt to parse it
@@ -132,32 +148,16 @@ public abstract class Invoker {
             // Once parsed, resolve it and use that value.
             final Object resolvedValue = flexpressionParser.evaluate(expression);
             log.debug("Resolving expression {} to {}", expression, resolvedValue);
-            return resolvedValue;
+            return ParameterResolution.of(resolvedValue);
         }
-        return null;
+        return ParameterResolution.unresolved();
     }
 
-    private Class<?> mapPrimitive(Class<?> clazz) {
-        if (clazz.isPrimitive()) {
-            if (clazz.equals(Boolean.TYPE)) {
-                return Boolean.class;
-            } else if (clazz.equals(Byte.TYPE)) {
-                return Byte.class;
-            } else if (clazz.equals(Character.TYPE)) {
-                return Character.class;
-            } else if (clazz.equals(Float.TYPE)) {
-                return Float.class;
-            } else if (clazz.equals(Integer.TYPE)) {
-                return Integer.class;
-            } else if (clazz.equals(Long.TYPE)) {
-                return Long.class;
-            } else if (clazz.equals(Short.TYPE)) {
-                return Short.class;
-            } else if (clazz.equals(Double.TYPE)) {
-                return Double.TYPE;
-            }
-        }
-        return clazz;
+    private ResolvableType mapPrimitive(ResolvableType resolvableType) {
+        Class<?> clazz = resolvableType.getRawClass();
+        return null != clazz && clazz.isPrimitive()
+                ? PRIMITIVE_MAP.get(clazz)
+                : resolvableType;
     }
 
 
@@ -169,38 +169,12 @@ public abstract class Invoker {
      * @param parameterDescription The parameter
      * @return The resulting object (or null)
      */
-    private Object beanFromSupplier(ParameterDescription parameterDescription) {
-        final Class<?> parameterDescriptionType = parameterDescription.getType();
-        Class<?> beanClass = mapPrimitive(parameterDescriptionType);
-        return parameterSupplierMap.entrySet().stream()
-                .filter(e -> beanClass.isAssignableFrom(e.getKey()))
-                .map(Map.Entry::getValue)
+    private ParameterResolution beanFromSupplier(ParameterDescription parameterDescription) {
+        return parameterSuppliers.stream()
+                .map(resolver -> resolver.apply(parameterDescription))
+                .filter(ParameterResolution::isResolved)
                 .findFirst()
-                .orElse(() -> null)
-                .get();
-    }
-
-    /**
-     * Get a bean from the context by name and type. Returns null of there isn't a
-     * match.
-     *
-     * @param parameterDescription The parameter
-     * @return The resulting object (or null)
-     */
-    private Object beanByNameAndType(ParameterDescription parameterDescription) {
-        String parameterName = parameterDescription.getName();
-        if (Objects.isNull(parameterName) || parameterName.isBlank()) {
-            return null;
-        } else {
-
-            // Attempt to get the bean with inferred name from the context. If we can get
-            // one (and it's the right type), then we use that bean as the argument
-            try {
-                return context.getBean(parameterName, parameterDescription.getType());
-            } catch (BeansException e) {
-                return null;
-            }
-        }
+                .orElseGet(ParameterResolution::unresolved);
     }
 
     /**
@@ -213,30 +187,40 @@ public abstract class Invoker {
      * @param parameterDescription The parameter
      * @return The resulting object (or null)
      */
-    private Object beanByType(ParameterDescription parameterDescription) {
+    private ParameterResolution beanByType(ParameterDescription parameterDescription) {
         final boolean isVarArgs = parameterDescription.isVarArgs();
-        if (!parameterDescription.getType().equals(Object.class)) {
-            if (isVarArgs) {
+        ResolvableType resolvableType = parameterDescription.getType();
+        if (isVarArgs) {
 
-                // Get the underlying component type, and all the beans for that type.
-                // Convert the beans into an array of the appropriate type, and return that
-                final Class<?> componentType = parameterDescription.getType().getComponentType();
-                Map<String, ?> beans = context.getBeansOfType(componentType);
-                Object targetArrayType = Array.newInstance(componentType, 0);
-                return beans.values().toArray((Object[]) targetArrayType);
+            // For varargs, the parameter type will be an array, but we want the
+            // underlying type.
+            ResolvableType underlyingType = resolvableType.getComponentType();
+            String[] beanNames = context.getBeanNamesForType(underlyingType);
+            // We have a list of beans than can satisfy the required type.
+            // Since this is varargs, we use all of them
+            return ParameterResolution.of(Arrays.stream(Arrays.stream(beanNames)
+                    .map(context::getBean)
+                    .toArray( size -> (Object[]) Array.newInstance(underlyingType.getRawClass(), size))));
+        } else {
+
+            String[] beanNames = context.getBeanNamesForType(resolvableType);
+
+            // If there is just one bean with the requested type, then
+            // use that for the parameter value.
+            if (beanNames.length == 1) {
+                return ParameterResolution.of(context.getBean(beanNames[0]));
             } else {
 
-                // Get the beans for the parameter type. If it's unique, return the unique value;
-                // otherwise attempt to get the primary bean
-                Map<String, ?> beans = context.getBeansOfType(parameterDescription.getType());
-                return switch (beans.size()) {
-                    case 0 -> null;
-                    case 1 -> beans.values().iterator().next();
-                    default -> getPrimary(beans);
-                };
+                // Multiple beans with the same type. See if there
+                // is a match by name; otherwise it's ambiguous and we return
+                // null;
+                return Arrays.stream(beanNames)
+                        .filter(beanName -> beanName.equals(parameterDescription.getName()))
+                        .map(context::getBean)
+                        .findFirst()
+                        .map(ParameterResolution::of)
+                        .orElseGet(ParameterResolution::unresolved);
             }
-        } else {
-            return null;
         }
     }
 
@@ -249,7 +233,7 @@ public abstract class Invoker {
     private Object getPrimary(Map<String, ?> beans) {
 
         List<String> primaryNames = beans.keySet().stream()
-                .filter(name -> Objects.nonNull(context.findAnnotationOnBean(name, Primary.class)))
+                .filter(name -> null != context.findAnnotationOnBean(name, Primary.class))
                 .toList();
         return primaryNames.size() == 1 ? beans.get(primaryNames.get(0)) : null;
     }
@@ -286,16 +270,19 @@ public abstract class Invoker {
      * @return The object that matches the parameter.
      */
     protected Object buildArgumentForParameter(ParameterDescription parameterDescription) {
-        final Class<?> parameterType = parameterDescription.getType();
-        final Class<?> mappedParameterType = mapPrimitive(parameterType);
-
         // Find the first resolvable argument that works, or null if one can't be found
-        return resolvers.stream()
+        Optional<ParameterResolution> resolvedParameter = resolvers.stream()
                 .map(resolver -> resolver.apply(parameterDescription))
-                .filter(Objects::nonNull)
-                .filter(o -> mappedParameterType.isAssignableFrom(mapPrimitive(o.getClass())))
-                .findFirst()
-                .orElseGet(() -> handleUnresolvedParameter(parameterDescription));
+                .filter(ParameterResolution::isResolved)
+                .findFirst();
+
+        // We break out of the stream here because the resolve parameter could be resolved,
+        // but still null (we know we have to give the model, but there isn't one).
+        if (resolvedParameter.isPresent()) {
+            return resolvedParameter.get().getValue();
+        } else {
+            return handleUnresolvedParameter(parameterDescription);
+        }
     }
 
 
@@ -324,7 +311,7 @@ public abstract class Invoker {
                 log.error("Could not invoke {}; the following parameters were unmapped. Consider making them nullable (@Nullable)", getMethodName());
                 unresolvedParameters.stream()
                         .map(p -> String.format("  Parameter # %s (potential name: %s, type: %s)",
-                                p.getIndex(), p.getName(), p.getType().getName()))
+                                p.getIndex(), p.getName(), p.getType().toString()))
                         .forEach(log::error);
                 if (throwOnInvalidParameter) {
                     throw new RuntimeException("Unmappable parameter(s)");
@@ -386,7 +373,7 @@ public abstract class Invoker {
 
         // Register build-in parameter suppliers. The caller might have added
         // other parameter suppliers as well, and that's fine.
-        registerBuildInParameterSuppliers();
+        registerBuildInParameterResolvers();
 
         // Clear out any unresolved parameters from previous calls.
         this.unresolvedParameters.clear();

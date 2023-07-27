@@ -36,7 +36,7 @@ public class MenuSelectedAdapter implements MenuListener {
 
     @Override
     public void menuSelected(MenuEvent e) {
-        spwing.aboutToDisplayMenu(menuID, menu, mappedMenuItems);
+        spwing.aboutToDisplayMenu(mappedMenuItems);
         if (dynamicMenu) {
             spwing.populateMenu(menuID, menu);
         }

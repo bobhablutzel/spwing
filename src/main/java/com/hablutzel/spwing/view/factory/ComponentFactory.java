@@ -18,79 +18,34 @@
 package com.hablutzel.spwing.view.factory;
 
 
-import com.hablutzel.spwing.context.EventAdapter;
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.view.adapter.*;
+import com.hablutzel.spwing.view.adapter.ContainerEventAdapter;
+import com.hablutzel.spwing.view.adapter.EventAdapter;
+import com.hablutzel.spwing.view.adapter.JButtonEventAdapter;
+import com.hablutzel.spwing.view.adapter.JCheckboxEventAdapter;
+import com.hablutzel.spwing.view.adapter.JComboBoxEventAdapter;
+import com.hablutzel.spwing.view.adapter.JFrameEventAdapter;
+import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
+import com.hablutzel.spwing.view.adapter.JPanelEventAdapter;
+import com.hablutzel.spwing.view.adapter.JRadioButtonEventAdapter;
+import com.hablutzel.spwing.view.adapter.JTextFieldEventAdapter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanWrapper;
-import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.lang.NonNull;
 
 import javax.swing.*;
 import java.awt.*;
-import java.beans.PropertyDescriptor;
 import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 @RequiredArgsConstructor
 @Slf4j
 public class ComponentFactory {
 
-    private final Object modelObject;
-    private final Object controllerObject;
+    private final Spwing spwing;
     private final DocumentEventDispatcher documentEventDispatcher;
     private final Map<String,Object> createdObjects;
-
-
-    /**
-     * The {@link ComponentFactory} tracks all the created objects.
-     * When the build of the view is complete, the view factory
-     * can then inject those created objects into either the
-     * model or controller object (if provided). See {@link #injectCreatedComponentsInto(Object)}
-     * for more details.
-     */
-    public void injectCreatedComponents() {
-        injectCreatedComponentsInto(modelObject);
-        injectCreatedComponentsInto(controllerObject);
-    }
-
-
-    /**
-     * Inject created objects into the specified object. This will create
-     * a BeanWrapper for the object, and use the settable properties
-     * that match the object name and type for the created objects.
-     * Objects have to have a name in order to be injectable.
-     *
-     * @param targetObject The object to inject into
-     */
-    private void injectCreatedComponentsInto(Object targetObject) {
-
-        // Make sure we have an object, and create the wrapper
-        if (Objects.nonNull(targetObject)) {
-            BeanWrapper model = new BeanWrapperImpl(targetObject);
-
-            // Loop through each descriptor, check to make sure it's writeable
-            for (PropertyDescriptor propertyDescriptor : model.getPropertyDescriptors()) {
-                final String descriptorName = propertyDescriptor.getName();
-                if (model.isWritableProperty(descriptorName)) {
-
-                    // If it's writable and there is an object with that name, see if the
-                    // object is type assignable.
-                    if (createdObjects.containsKey(descriptorName)) {
-                        final Object createdObject = createdObjects.get(descriptorName);
-                        if (propertyDescriptor.getPropertyType().isAssignableFrom(createdObject.getClass())) {
-
-                            // If we get here, then set the property value.
-                            model.setPropertyValue(descriptorName, createdObject);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
 
     public JPanel newJPanel(String name) {
         return registerAdapter(new JPanel(), name, JPanelEventAdapter::new);
@@ -115,15 +70,12 @@ public class ComponentFactory {
         return registerAdapter( new JRadioButton(name), name, JRadioButtonEventAdapter::new);
     }
 
-    public ButtonGroup newButtonGroup(final String name) {
-        ButtonGroup buttonGroup = new ButtonGroup();
-        createdObjects.put(name, buttonGroup);
-        return buttonGroup;
+    public JComboBox<?> newJComboBox(@NonNull final String name) {
+        final JComboBox<Object> comboBox = new JComboBox<>();
+        comboBox.setActionCommand(null);
+        return registerAdapter(comboBox, name, JComboBoxEventAdapter::new);
     }
 
-    public ButtonGroup newAnonymousButtonGroup() {
-        return new ButtonGroup();
-    }
 
 
     public JFrame newJFrame(@NonNull final String name) {
@@ -140,7 +92,7 @@ public class ComponentFactory {
 
     public <T> T registerAdapter(@NonNull final T instance,
                                  @NonNull final String name,
-                                 final Function<T, EventAdapter> createAdapter ) {
+                                 final BiFunction<T, Spwing, EventAdapter> createAdapter ) {
         if (!name.isBlank()) {
             if (instance instanceof Component component) {
                 component.setName(name);
@@ -148,8 +100,8 @@ public class ComponentFactory {
 
             createdObjects.put(name, instance);
 
-            if (Objects.nonNull(createAdapter)) {
-                documentEventDispatcher.registerEventAdapter(name, createAdapter.apply(instance));
+            if (null != createAdapter) {
+                documentEventDispatcher.registerEventAdapter(name, createAdapter.apply(instance, spwing));
             }
         }
         return instance;

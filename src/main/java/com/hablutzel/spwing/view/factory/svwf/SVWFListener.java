@@ -18,13 +18,16 @@
 package com.hablutzel.spwing.view.factory.svwf;
 
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.constants.ConstantContext;
 import com.hablutzel.spwing.constants.ContextualConstant;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
 import com.hablutzel.spwing.view.bind.Accessor;
+import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +54,6 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -70,7 +72,7 @@ import java.util.regex.Pattern;
 public class SVWFListener extends SpwingViewFileBaseListener {
     public static final Pattern GRID_COORDINATE_PATTERN = Pattern.compile("([a-zA-Z]+)(\\d+)");
     private final Object modelObject;
-    private final Object controllerObject;
+    private final Spwing spwing;
     private final ApplicationContext applicationContext;
     private final ConversionService conversionService;
     private final DocumentEventDispatcher documentEventDispatcher;
@@ -171,12 +173,11 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         final Object targetObject = getRootClauseObject(ctx.root);
 
         // See if we can find that method on the target
-        if (Objects.nonNull(targetObject)) {
-            ReflectiveInvoker.invoke(applicationContext, targetObject, methodName, Map.of(
-                    SVWFListener.class, () -> this,
-                    SpwingViewFileParser.SvwfFileContext.class, () -> svwfFileContext,
-                    SVWFParseContext.class, () -> parseContext
-            ));
+        if (null != targetObject) {
+            ReflectiveInvoker.invoke(applicationContext, targetObject, methodName,
+                    ParameterResolution.forClass(SVWFListener.class, this),
+                    ParameterResolution.forClass(SpwingViewFileParser.SvwfFileContext.class, svwfFileContext),
+                    ParameterResolution.forClass(SVWFParseContext.class, parseContext));
         }
     }
 
@@ -190,14 +191,12 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * @return
      */
     private Object getRootClauseObject(SpwingViewFileParser.RootClauseContext rootClauseContext) {
-        if (Objects.nonNull(rootClauseContext)) {
+        if (null != rootClauseContext) {
 
-            // The target can be either a keyword (model or controller) or a String
-            if (Objects.nonNull(rootClauseContext.m)) {
+            // The target can be either a keyword (model) or a String
+            if (null != rootClauseContext.m) {
                 return modelObject;
-            } else if (Objects.nonNull(rootClauseContext.c)) {
-                return controllerObject;
-            } else if (Objects.nonNull(rootClauseContext.b)) {
+            } else if (null != rootClauseContext.b) {
                 final String beanName = rootClauseContext.b.getText();
                 try {
                     return applicationContext.getBean(beanName);
@@ -235,7 +234,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      */
     private void bindSingleObject( final SpwingViewFileParser.SingleTargetClauseContext ctx,
                                     final Accessor accessor,
-                                    final List<String> triggers ) {
+                                    final List<RefreshTrigger> triggers ) {
 
         // Get the identifier and property. The identifier should
         // reference a component created earlier by name - it is the
@@ -266,7 +265,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * @return The (possibly empty) list of triggers.
      */
     private List<String> getTriggers(SpwingViewFileParser.TriggerClauseContext ctx) {
-        if (Objects.isNull(ctx)) {
+        if (null == ctx) {
             return List.of();
         } else {
             return ctx.stringElement().stream()
@@ -287,7 +286,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private void bindGroup( final SpwingViewFileParser.GroupTargetClauseContext ctx,
                             final Accessor accessor,
-                            final List<String> triggers ) {
+                            final List<RefreshTrigger> triggers ) {
 
         // Get the property. This should be something shared across all the
         // components being referenced
@@ -314,7 +313,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                     .toList();
 
             // See if the group was named. If so, and all elements are components, save this target element list
-            if (Objects.nonNull(ctx.groupName)) {
+            if (null != ctx.groupName) {
 
                 boolean allComponents = targetElements.stream().allMatch(c -> c instanceof Component);
                 if (allComponents) {
@@ -351,17 +350,18 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         String expression = stripStringLiteral(ctx.expression);
         Accessor accessor = parseContext.getViewPropertyBinder().toAccessor(rootObject, expression);
 
-
         List<String> triggers = getTriggers(ctx.triggerClause());
+        List<RefreshTrigger> refreshTriggers = parseContext.getViewPropertyBinder()
+                .getRefreshTriggers(applicationContext, rootObject, expression, triggers);
 
         // Get the property accessor for this element
-        if (Objects.nonNull(accessor)) {
+        if (null != accessor) {
 
             // See if we have a group or single binding statement
-            if (Objects.nonNull(ctx.target.single)) {
-                bindSingleObject(ctx.target.single, accessor, triggers);
+            if (null != ctx.target.single) {
+                bindSingleObject(ctx.target.single, accessor, refreshTriggers);
             } else {
-                bindGroup(ctx.target.group, accessor, triggers);
+                bindGroup(ctx.target.group, accessor, refreshTriggers);
             }
         } else {
             this.cleanParse = false;
@@ -379,7 +379,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * @return TRUE if the token is non-null and textually matches
      */
     private boolean tokenEquals(@NonNull final String value, @Nullable final Token token) {
-        return Objects.nonNull(token) && value.equals(token.getText());
+        return null != token && value.equals(token.getText());
     }
 
     @Override
@@ -407,9 +407,9 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     public void enterColorStatement(SpwingViewFileParser.ColorStatementContext ctx) {
         String colorName = ctx.name.getText();
         SpwingViewFileParser.ColorDefinitionContext colorDefinitionContext = ctx.colorDefinition();
-        if (Objects.nonNull(colorDefinitionContext.intColorSpec())) {
+        if (null != colorDefinitionContext.intColorSpec()) {
             defineIntColor(colorName, colorDefinitionContext.intColorSpec());
-        } else if (Objects.nonNull(colorDefinitionContext.floatColorSpec())) {
+        } else if (null != colorDefinitionContext.floatColorSpec()) {
             defineFloatColor(colorName, colorDefinitionContext.floatColorSpec());
         } else {
             defineBitfieldColor(colorName, colorDefinitionContext.bitFieldColorSpec());
@@ -418,7 +418,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private void defineIntColor(final String colorName,
                                 final SpwingViewFileParser.IntColorSpecContext intColorSpecContext) {
-        if (Objects.nonNull(intColorSpecContext.alpha)) {
+        if (null != intColorSpecContext.alpha) {
             parseContext.getKnownComponents().put(colorName,
                     new Color(getIntValue(intColorSpecContext.red),
                             getIntValue(intColorSpecContext.green),
@@ -434,7 +434,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private void defineFloatColor(final String colorName,
                                   final SpwingViewFileParser.FloatColorSpecContext floatColorSpecContext) {
-        if (Objects.nonNull(floatColorSpecContext.alphaf)) {
+        if (null != floatColorSpecContext.alphaf) {
             parseContext.getKnownComponents().put(colorName,
                     new Color(getFloatValue(floatColorSpecContext.redf),
                             getFloatValue(floatColorSpecContext.greenf),
@@ -458,10 +458,10 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     @Override
     public void enterImageStatement(SpwingViewFileParser.ImageStatementContext ctx) {
         String imageName = ctx.name.getText();
-        if (Objects.nonNull(ctx.imageSpec().resourceName)) {
+        if (null != ctx.imageSpec().resourceName) {
             String resourceName = stripStringLiteral(ctx.imageSpec().resourceName);
             Object target = getRootClauseObject(ctx.imageSpec().root);
-            if (Objects.nonNull(target)) {
+            if (null != target) {
 
                 String baseName = FilenameUtils.getBaseName(resourceName);
                 String extension = FilenameUtils.getExtension(resourceName);
@@ -512,7 +512,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             // Get the definition of the element based on the alias. This will give
             // us the function for creating the new alias
             SVWFParseContext.ElementDefinition elementDefinition = parseContext.getDefinitionMap().get(classAlias);
-            if (Objects.nonNull(elementDefinition)) {
+            if (null != elementDefinition) {
 
                 // We have the alias, create the instance and get a class for what we just defined.
                 final Function<String, Object> creationFunction = elementDefinition.createFunction();
@@ -569,7 +569,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
             // Get the property type for this component, based on the name given
             final Class<?> propertyType = activeComponent.getPropertyType(propertyName);
-            if (Objects.nonNull(propertyType)) {
+            if (null != propertyType) {
 
                 // Push the value to the component.
                 Object unconvertedValue = declaredValue.get();
@@ -594,18 +594,18 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         private final SpwingViewFileParser.PairValueContext valueContext;
 
         public Object get() {
-            if (Objects.nonNull(valueContext.bool)) {
+            if (null != valueContext.bool) {
                 return valueContext.bool.getText().equals("true");
-            } else if (Objects.nonNull(valueContext.string)) {
+            } else if (null != valueContext.string) {
                 return stripStringLiteral(valueContext.string);
-            } else if (Objects.nonNull(valueContext.floatVal)) {
+            } else if (null != valueContext.floatVal) {
                 return getFloatValue(valueContext.floatVal);
-            } else if (Objects.nonNull(valueContext.size)) {
+            } else if (null != valueContext.size) {
                 return parseDimension(valueContext.size);
-            } else if (Objects.nonNull(valueContext.in)) {
+            } else if (null != valueContext.in) {
                 return new Insets( getIntValue(valueContext.in.top), getIntValue(valueContext.in.left),
                         getIntValue(valueContext.in.bottom), getIntValue(valueContext.in.right));
-            } else if (Objects.nonNull(valueContext.id)) {
+            } else if (null != valueContext.id) {
                 return parseContext.getKnownComponents().get(valueContext.id.getText());
             } else {
                 return getIntValue(valueContext.integer);
@@ -649,7 +649,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private void onNamedComponent(Token token, Consumer<Component> consumer, boolean wrapButtonGroup) {
         final Object element = getNamedElement(token);
-        if (Objects.isNull(element) && "filler".equals(token.getText())) {
+        if (null == element && "filler".equals(token.getText())) {
             consumer.accept(new JPanel());
         } else {
             if (element instanceof Component component) {
@@ -670,7 +670,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     @Override
     public void enterFlowLayoutDescription(SpwingViewFileParser.FlowLayoutDescriptionContext ctx) {
-        if (Objects.nonNull(layoutContainer)) {
+        if (null != layoutContainer) {
             if (layoutContainer instanceof JFrame frame) {
                 frame.getContentPane().setLayout(new FlowLayout());
             } else {
@@ -684,7 +684,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     @Override
     public void enterButtonBarLayoutDescription(SpwingViewFileParser.ButtonBarLayoutDescriptionContext ctx) {
-        if (Objects.nonNull(layoutContainer)) {
+        if (null != layoutContainer) {
 
             // Create the box layout - always horizontal for button bars
             setLayout(container -> new BoxLayout(container, BoxLayout.X_AXIS));
@@ -710,7 +710,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     public void enterGridBagLayoutDescription(SpwingViewFileParser.GridBagLayoutDescriptionContext ctx) {
 
         // Make sure we have a container to layout
-        if (Objects.nonNull(layoutContainer)) {
+        if (null != layoutContainer) {
 
             // Add the grid bag layout to the container
             final GridBagLayout gridBagLayout = new GridBagLayout();
@@ -722,7 +722,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 GridBagConstraints gridBagConstraints = new GridBagConstraints();
 
                 // Handle the modifiers for this element
-                if (Objects.nonNull(gridBagElementDescriptionContext.modifiers)) {
+                if (null != gridBagElementDescriptionContext.modifiers) {
                     gridBagElementDescriptionContext.modifiers.kvPair().forEach( kvPair -> {
                         String propertyName = kvPair.k.getText();
                         DeclaredValue declaredValue = new DeclaredValue(kvPair.v);
@@ -750,7 +750,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 }
 
                 // If there isn't a placement, then we use a default placement
-                if (Objects.nonNull(gridBagElementDescriptionContext.placement)) {
+                if (null != gridBagElementDescriptionContext.placement) {
 
                     // We need to decode the height and width. To make the parser
                     // simpler, these are specified as general identifiers, but need
@@ -769,7 +769,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                     final Dimension topLeft = decodeGridCoordinate(topLeftSpec);
                     gridBagConstraints.gridx = topLeft.width;
                     gridBagConstraints.gridy = topLeft.height;
-                    if (Objects.nonNull(gridBagElementDescriptionContext.placement.botRight)) {
+                    if (null != gridBagElementDescriptionContext.placement.botRight) {
                         final String botRightSpec = gridBagElementDescriptionContext.placement.botRight.getText();
                         Dimension botRight = decodeGridCoordinate(botRightSpec);
                         gridBagConstraints.gridwidth = botRight.width - topLeft.width + 1;
@@ -791,7 +791,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
 
     private <T> T doConvert(Object unconvertedValue, Class<T> clazz, T defaultValue ) {
-        if (Objects.nonNull(unconvertedValue) && conversionService.canConvert(unconvertedValue.getClass(), clazz)) {
+        if (null != unconvertedValue && conversionService.canConvert(unconvertedValue.getClass(), clazz)) {
             return conversionService.convert(unconvertedValue, clazz);
         } else {
             return defaultValue;
@@ -833,7 +833,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      *     <li>A => 1</li>
      *     <li>B => 2</li>
      *     <li>AA => 27</li>
-     *     etc
+     *     <li>etc</li>
      * </ul>
      * @param columnSpecification
      * @return
@@ -855,7 +855,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     public void enterBoxLayoutDescription(SpwingViewFileParser.BoxLayoutDescriptionContext ctx) {
 
         // Make sure we have a container to layout
-        if (Objects.nonNull(layoutContainer)) {
+        if (null != layoutContainer) {
 
             // Determine whether we are arranging horizontally or vertically and create the layout
             int axis = tokenEquals("vertical", ctx.orientation) ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS;
@@ -863,15 +863,15 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
             ctx.boxElement().forEach(boxElementContext -> {
 
-                if (Objects.nonNull(boxElementContext.identifierElement())) {
+                if (null != boxElementContext.identifierElement()) {
                     onNamedComponent(boxElementContext.identifierElement().element, layoutContainer::add, false);
-                } else if (Objects.nonNull(boxElementContext.horizontalGlue)) {
+                } else if (null != boxElementContext.horizontalGlue) {
                     layoutContainer.add(Box.createHorizontalGlue());
-                } else if (Objects.nonNull(boxElementContext.verticalGlue)) {
+                } else if (null != boxElementContext.verticalGlue) {
                     layoutContainer.add(Box.createVerticalGlue());
-                } else if (Objects.nonNull(boxElementContext.rigidArea)) {
+                } else if (null != boxElementContext.rigidArea) {
                     layoutContainer.add(Box.createRigidArea(parseDimension(boxElementContext.size)));
-                } else if (Objects.nonNull(boxElementContext.filler)) {
+                } else if (null != boxElementContext.filler) {
 
                     Map<String, Dimension> dimensions = new java.util.HashMap<>(Map.of(
                             "minSize", new Dimension(0, 0),
@@ -897,7 +897,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     @Override
     public void enterBorderLayoutDescription(SpwingViewFileParser.BorderLayoutDescriptionContext ctx) {
-        if (Objects.nonNull(layoutContainer)) {
+        if (null != layoutContainer) {
             setLayout(container -> new BorderLayout());
 
             ctx.borderElement().forEach(borderElementContext -> {
@@ -930,7 +930,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         JLabel result = new JLabel();
         result.setIcon(icon);
         result.setName(componentName);
-        documentEventDispatcher.registerEventAdapter(componentName, new JLabelEventAdapter(result));
+        documentEventDispatcher.registerEventAdapter(componentName, new JLabelEventAdapter(result, spwing));
         return result;
     }
 

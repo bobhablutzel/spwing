@@ -17,10 +17,14 @@
 
 package com.hablutzel.spwing.view.bind;
 
+import com.hablutzel.spwing.events.DocumentEventDispatcher;
+import com.hablutzel.spwing.model.PropertyChangeModel;
 import com.hablutzel.spwing.util.FlexpressionParser;
-import com.hablutzel.spwing.view.bind.controllers.BindController;
 import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
-import com.hablutzel.spwing.view.bind.watch.GenericPropertyBinder;
+import com.hablutzel.spwing.view.bind.impl.DocumentEventRefreshTrigger;
+import com.hablutzel.spwing.view.bind.impl.GenericPropertyBinder;
+import com.hablutzel.spwing.view.bind.impl.PropertyListenerRefreshTrigger;
+import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
@@ -36,8 +40,17 @@ import org.springframework.lang.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyEditor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.*;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -112,7 +125,7 @@ public class ViewPropertyBinder {
     public Accessor toAccessor(@Nullable final Object targetObject, final String valueExpression) {
 
         // First preference: A property, as this will allow read/write
-        if (Objects.nonNull(targetObject)) {
+        if (null != targetObject) {
             BeanWrapper targetBeanWrapper = beanWrapperFor(targetObject);
             if (targetBeanWrapper.isReadableProperty(valueExpression)) {
                 return new PropertyAccessor(targetBeanWrapper, valueExpression, conversionService);
@@ -141,13 +154,64 @@ public class ViewPropertyBinder {
     }
 
 
+    public List<RefreshTrigger> getRefreshTriggers(final ApplicationContext applicationContext,
+                                                      final Object targetObject,
+                                                      final String propertyName,
+                                                      final List<String> triggers ) {
+
+        // If the list of triggers is non-empty, then we need to look for document events
+        if (!triggers.isEmpty()) {
+            DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
+
+            return triggers.stream()
+                    .map(trigger -> new DocumentEventRefreshTrigger(applicationContext, documentEventDispatcher, trigger))
+                    .map(RefreshTrigger.class::cast)
+                    .toList();
+        } else if (targetObject instanceof PropertyEditor propertyEditor) {
+
+            // No defined triggers, so we're going to see if we can use property listeners
+            // This branch works for models that are derived from PropertyEditor instances.
+            PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
+            propertyEditor.addPropertyChangeListener(refreshTrigger);
+            return List.of(refreshTrigger);
+        } else if (targetObject instanceof PropertyChangeModel propertyChangeModel) {
+
+            // No defined triggers, so we're going to see if we can use property listeners
+            // This branch works for models that are derived from PropertyEditor instances.
+            PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
+            propertyChangeModel.addPropertyChangeListener(refreshTrigger);
+            return List.of(refreshTrigger);
+        } else {
+            // Reflective approach
+            Optional<Method> optionalAddListenerMethod = Arrays.stream(targetObject.getClass().getMethods())
+                    .filter(method -> !Modifier.isStatic(method.getModifiers()) &&
+                            !Modifier.isAbstract(method.getModifiers()) &&
+                            method.getName().equals("addPropertyChangeListener") &&
+                            method.getParameters().length == 1 &&
+                            method.getParameters()[0].getType().equals(PropertyChangeListener.class))
+                    .findFirst();
+            if (optionalAddListenerMethod.isPresent()) {
+                PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
+                final Method addListenerMethod = optionalAddListenerMethod.get();
+                try {
+                    addListenerMethod.invoke(targetObject, refreshTrigger );
+                    return List.of(refreshTrigger);
+                } catch (IllegalAccessException | InvocationTargetException e) {
+                    log.warn("Method {} of {} could not be invoked, no refresh trigger generated. ", addListenerMethod.getName(), targetObject.getClass().getName());
+                }
+            }
+            return List.of();
+        }
+    }
+
+
 
 
 
     public void bindButtonGroup( final List<AbstractButton> buttons,
                                   final String property,
                                   final Accessor accessor,
-                                  final List<String> triggers ) {
+                                  final List<RefreshTrigger> triggers ) {
 
         // Create the new button group, add all the buttons
         ButtonGroup buttonGroup = new ButtonGroup();
@@ -195,7 +259,7 @@ public class ViewPropertyBinder {
     public boolean bind(final Object viewObject,
                         final String viewObjectProperty,
                         final Accessor authoritativeValue,
-                        final List<String> triggers) {
+                        final List<RefreshTrigger> triggers) {
         return bind(viewObject, viewObjectProperty, valueMap.get(viewObjectProperty), authoritativeValue, triggers);
     }
 
@@ -231,7 +295,7 @@ public class ViewPropertyBinder {
                         @NonNull final String viewObjectProperty,
                         @NonNull final Object viewObjectValue,
                         @NonNull final Accessor authoritativeValue,
-                        @NonNull final List<String> triggers) {
+                        @NonNull final List<RefreshTrigger> triggers) {
 
 
         // Block bindings to the name property
@@ -240,59 +304,19 @@ public class ViewPropertyBinder {
         // Get the view object bean wrapper.
         BeanWrapper viewObjectBeanWrapper = beanWrapperFor(viewObject);
 
-        // We have to determine if we can bind this property. There are
-        // two ways we can bind: (1) We have a BindController instance,
-        // which will have a dedicated Binder associated with it, or
-        // (2) we have a writable property that can be bound to.
-        final boolean isBindController = viewObject instanceof BindController;
-        final boolean isWriteable = viewObjectBeanWrapper.isWritableProperty(viewObjectProperty);
-        if (isBindController || isWriteable) {
+        // See if there is a binder for this property given the source type
+        Optional<Binder> found = binders.stream()
+                .filter(binder -> binder.binds(viewObjectBeanWrapper, viewObjectProperty, authoritativeValue))
+                .findFirst();
 
-            // See if there is a binder for this property given the source type
-            binders.stream()
-                    .filter(binder -> binder.binds(viewObjectBeanWrapper, viewObjectProperty, authoritativeValue))
-                    .findFirst()
-                    .ifPresentOrElse(binder -> binder.bind(viewObjectBeanWrapper, viewObjectProperty, viewObjectValue, authoritativeValue, triggers, applicationContext),
-                            () -> log.error("Unable to find a binding for property {}", viewObjectProperty));
-
+        if (found.isPresent()) {
+            Binder binder = found.get();
+            binder.bind(viewObjectBeanWrapper, viewObjectProperty, viewObjectValue, authoritativeValue, triggers, applicationContext);
             return true;
         } else {
-            log.warn( "Property {} is not a writeable property for the item", viewObjectProperty);
+            log.error("Unable to find a binding for property {}", viewObjectProperty);
             return false;
         }
-
-//
-//            if (authoritativeValue.canSupply(viewPropertyType)) {
-//
-//                // Get a consumer for writing to this property, and bind it to the accessor
-//                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, viewPropertyType);
-//
-//                // See if the authoritative value is writable
-//                if (authoritativeValue.isWriteable()) {
-//                    Class<?> viewObjectClass = viewObject.getClass();
-//
-//                    // Find a watch binder that can watch for changes to this specific
-//                    // property and update the writable value of the authoritative object.
-//                    binders.stream()
-//                            .filter(binder -> viewObjectProperty.equals(binder.getProperty()) &&
-//                                    binder.getTarget().isAssignableFrom(viewObjectClass))
-//                            .findFirst()
-//                            .ifPresent(binder -> binder.bind(, viewObject, authoritativeValue, valueMap.get(viewObject)));
-//                } else {
-//                    // If we can't write the value, then prevent the user from changing it.
-//                    // It can still be changed by trigger events
-//                    if (viewObject instanceof Component component) {
-//                        component.setEnabled(false);
-//                    }
-//                }
-//            } else {
-//                log.error( "The expression {} cannot provide a {}", authoritativeValue,  viewPropertyType );
-//            }
-//            return true;
-//
-//        } else {
-//            return false;
-//        }
     }
 
 
@@ -300,7 +324,7 @@ public class ViewPropertyBinder {
     public boolean bindGroup( @NonNull final List<Object> targetElements,
                               @NonNull final String targetProperty,
                               @NonNull final Accessor modelAccessor,
-                              @NonNull final List<String> triggers ) {
+                              @NonNull final List<RefreshTrigger> triggers ) {
 
         // Make sure we aren't binding to "name"
         if (invalidTargetProperty(targetProperty)) return false;

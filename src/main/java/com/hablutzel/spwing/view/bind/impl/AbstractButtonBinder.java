@@ -15,7 +15,7 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.watch;
+package com.hablutzel.spwing.view.bind.impl;
 
 import com.hablutzel.spwing.view.bind.Accessor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +52,7 @@ public class AbstractButtonBinder extends BaseBinder {
                      @NonNull final String propertyName,
                      @NonNull final Object targetObjectValue,
                      @NonNull final Accessor authoritativeValueAccessor,
-                     @NonNull final List<String> triggers,
+                     @NonNull final List<RefreshTrigger> triggers,
                      @NonNull final ApplicationContext applicationContext) {
 
         super.bind(wrappedTargetObject, propertyName, targetObjectValue, authoritativeValueAccessor, triggers, applicationContext);

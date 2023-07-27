@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, Hablutzel Consulting, LLC.
+ * Copyright © 2023. Hablutzel Consulting, LLC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,13 +12,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package com.hablutzel.spwing.context;
+package com.hablutzel.spwing.view.adapter;
 
 import com.hablutzel.spwing.invoke.Invoker;
 
 import javax.swing.event.AncestorListener;
+import java.awt.event.ActionEvent;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.TextEvent;
@@ -58,6 +60,15 @@ public interface EventAdapter {
      * @return TRUE if this adapter can understand that event name
      */
     boolean understands(String eventName);
+
+
+    /**
+     * Fire a command to be handled via the handler stack (as opposed
+     * to the event processing mechanisms
+     * @param commandName The command name (from the actionCommand}
+     * @param actionEvent The action event associated with the actionCommand
+     */
+    void fireCommand(String commandName, ActionEvent actionEvent);
 
 
 }

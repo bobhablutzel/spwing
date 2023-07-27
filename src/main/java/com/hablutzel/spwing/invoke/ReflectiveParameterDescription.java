@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.StandardReflectionParameterNameDiscoverer;
 import org.springframework.core.annotation.SynthesizingMethodParameter;
 
@@ -30,7 +31,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.util.Map;
-import java.util.Objects;
 
 
 @RequiredArgsConstructor
@@ -58,7 +58,7 @@ class ReflectiveParameterDescription implements ParameterDescription {
     @Override
     public String getName() {
 
-        if (Objects.isNull(resolvedName)) {
+        if (null == resolvedName) {
             resolvedName = resolveName();
         }
         return resolvedName;
@@ -68,14 +68,14 @@ class ReflectiveParameterDescription implements ParameterDescription {
     private String resolveName() {
 
         String syntheticName = parameter.getParameterName();
-        if (Objects.nonNull(syntheticName) && !syntheticName.isBlank()) {
+        if (null != syntheticName && !syntheticName.isBlank()) {
             return syntheticName;
         }
 
         // See if there is a Qualifier annotation on the parameter that
         // gives us the name of the target bean.
         Qualifier qualifier = parameter.getParameterAnnotation(Qualifier.class);
-        if (Objects.nonNull(qualifier)) {
+        if (null != qualifier) {
             return qualifier.value();
         }
 
@@ -84,7 +84,7 @@ class ReflectiveParameterDescription implements ParameterDescription {
         Map<String, ParameterNameDiscoverer> discovererMap = applicationContext.getBeansOfType(ParameterNameDiscoverer.class);
         for (ParameterNameDiscoverer discoverer : discovererMap.values()) {
             String[] parameterNames = getParameterNames(discoverer);
-            if (Objects.nonNull(parameterNames) && parameterNames.length > parameter.getParameterIndex()) {
+            if (null != parameterNames && parameterNames.length > parameter.getParameterIndex()) {
                 return parameterNames[parameter.getParameterIndex()];
             }
         }
@@ -92,7 +92,7 @@ class ReflectiveParameterDescription implements ParameterDescription {
         // Allow parameter name discovery based on the usage of the "-parameters" javac switch
         StandardReflectionParameterNameDiscoverer nameDiscoverer = new StandardReflectionParameterNameDiscoverer();
         String[] parameterNamesFromDiscoverer = getParameterNames(nameDiscoverer);
-        if (Objects.nonNull(parameterNamesFromDiscoverer) &&
+        if (null != parameterNamesFromDiscoverer &&
                 parameterNamesFromDiscoverer.length > parameter.getParameterIndex()) {
             return parameterNamesFromDiscoverer[parameter.getParameterIndex()];
         }
@@ -102,8 +102,8 @@ class ReflectiveParameterDescription implements ParameterDescription {
 
 
     @Override
-    public Class<?> getType() {
-        return parameter.getParameterType();
+    public ResolvableType getType() {
+        return ResolvableType.forMethodParameter(parameter);
     }
 
     @Override

@@ -16,22 +16,27 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.swing.*;
-import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 /**
  * An event adapter for abstract buttons. This
  * class handles single abstract buttons, see the
- * {@link com.hablutzel.spwing.view.bind.watch.ButtonGroupSelectedBinder}
+ * {@link com.hablutzel.spwing.view.bind.impl.ButtonGroupSelectedBinder}
  * class for button groups.
  *
  * @author Bob Hablutzel
  */
+@Slf4j
 public class AbstractButtonEventAdapter extends JComponentEventAdapter {
 
     /**
@@ -49,10 +54,28 @@ public class AbstractButtonEventAdapter extends JComponentEventAdapter {
      * Constructor
      *
      * @param abstractButton The abstract button
+     * @param spwing The framework instance
      */
-    public AbstractButtonEventAdapter(AbstractButton abstractButton) {
-        super(abstractButton);
+    public AbstractButtonEventAdapter(final AbstractButton abstractButton,
+                                      final Spwing spwing) {
+        super(abstractButton, spwing);
         this.abstractButton = abstractButton;
+
+        // Add a handler for the action event that fires commands as required
+        // We do some checking here, because the default in Swing is to set the
+        // action command to the text of the button. That generally won't be a
+        // command in the Spwing world, so we check to see that the action command
+        // is present, starts with a cmd, or at least doesn't equal the button text.
+        abstractButton.addActionListener(actionEvent -> {
+            String actionCommand = actionEvent.getActionCommand();
+            if (null != actionCommand &&
+                    !actionCommand.isBlank() &&
+                    (actionCommand.startsWith("cmd") || !actionCommand.equals(abstractButton.getText()))) {
+                log.debug( "Firing button command: {}", actionCommand);
+                fireCommand(actionCommand, actionEvent);
+            }
+        });
+
     }
 
 
@@ -99,9 +122,11 @@ public class AbstractButtonEventAdapter extends JComponentEventAdapter {
      * @return The map of suppliers.
      */
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(AbstractButton.class, () -> abstractButton,
-                Boolean.class, abstractButton::isSelected);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        HashSet<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add( ParameterResolution.forClass(AbstractButton.class, abstractButton));
+        result.add( ParameterResolution.forClass(Boolean.class,abstractButton.isSelected()));
+        return result;
     }
 
 }

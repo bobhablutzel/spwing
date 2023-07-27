@@ -16,16 +16,31 @@
 
 package com.hablutzel.spwing.view.adapter;
 
-import com.hablutzel.spwing.context.EventAdapter;
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.HierarchyBoundsAdapter;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.InputMethodEvent;
+import java.awt.event.InputMethodListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.EventObject;
-import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 
@@ -49,14 +64,23 @@ public abstract class ComponentEventAdapter implements EventAdapter {
     private final Component component;
 
     /**
+     * The active framework instance. Some of the adapters
+     * support ActionCommands, which need to fire the commands.
+     * The framework provides that functionality
+     */
+    @Getter
+    private final Spwing spwing;
+
+    /**
      * When the {@link Invoker} is called, we want to be able to
      * provide at minimum the component that is being watched. This
      * method gives the adapter an opportunity to provide those
      * additional parameters to inject into the {@link Invoker} before
      * the method is called.
+     *
      * @return A map of classes to value {@link Supplier} instances.
      */
-    protected abstract Map<Class<?>,Supplier<Object>> getParameterMap();
+    protected abstract Set<Function<ParameterDescription,ParameterResolution>> getInjectedParameters();
 
 
     /**
@@ -233,9 +257,18 @@ public abstract class ComponentEventAdapter implements EventAdapter {
      * @param invoker The invoker
      */
     protected void callInvokerForAction(EventObject eventObject, Invoker invoker) {
-        invoker.registerParameterSupplier(eventObject.getClass(), () -> eventObject);
-        getParameterMap().forEach(invoker::registerParameterSupplier);
+        invoker.registerParameterResolver(ParameterResolution.forClass(eventObject.getClass(), eventObject));
+        getInjectedParameters().forEach(invoker::registerParameterResolver);
         invoker.invoke();
+    }
+
+
+    /**
+     * Fire a command to be handled via the handler stack (as opposed
+     * to the event processing mechanisms
+     */
+    public void fireCommand(String commandName, ActionEvent actionEvent) {
+        spwing.fireCommand(commandName, ParameterResolution.forClass(ActionEvent.class, actionEvent));
     }
 
 

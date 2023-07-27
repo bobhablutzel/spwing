@@ -16,23 +16,31 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
 import javax.swing.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
 public class JPanelEventAdapter extends JComponentEventAdapter {
 
     private final JPanel panel;
 
-    public JPanelEventAdapter(JPanel panel) {
-        super(panel);
+    public JPanelEventAdapter(final JPanel panel,
+                              final Spwing spwing) {
+        super(panel, spwing);
         this.panel = panel;
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JPanel.class, () -> panel);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JPanel.class, panel));
+        return result;
     }
 
 }

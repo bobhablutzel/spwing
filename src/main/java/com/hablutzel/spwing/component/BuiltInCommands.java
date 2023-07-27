@@ -16,11 +16,16 @@
 
 package com.hablutzel.spwing.component;
 
-import com.hablutzel.spwing.ApplicationConfiguration;
 import com.hablutzel.spwing.Spwing;
-import com.hablutzel.spwing.annotations.*;
+import com.hablutzel.spwing.annotations.EnablerFor;
+import com.hablutzel.spwing.annotations.Handler;
+import com.hablutzel.spwing.annotations.HandlerFor;
+import com.hablutzel.spwing.annotations.MenuSource;
+import com.hablutzel.spwing.annotations.Model;
+import com.hablutzel.spwing.command.CommandAwareUndoManager;
 import com.hablutzel.spwing.context.DocumentSession;
-import com.hablutzel.spwing.model.Saveable;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+import com.hablutzel.spwing.model.ModelConfiguration;
 import com.hablutzel.spwing.util.FileChooserUtils;
 import com.hablutzel.spwing.util.WindowUtils;
 import lombok.RequiredArgsConstructor;
@@ -28,13 +33,19 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.MessageSource;
 import org.springframework.context.MessageSourceAware;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.ResolvableType;
+import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.undo.UndoManager;
 import java.awt.*;
 import java.awt.desktop.QuitEvent;
 import java.awt.desktop.QuitResponse;
@@ -42,13 +53,20 @@ import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 
 /**
@@ -72,123 +90,206 @@ import java.util.function.Consumer;
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public final class BuiltInCommands implements MessageSourceAware {
+public final class BuiltInCommands implements MessageSourceAware, ApplicationContextAware {
 
     private final Spwing spwing;
     private final FileChooserUtils fileChooserUtils;
+    private Class<?> primaryModelClass = null;
+
+    @Setter
+    private ApplicationContext applicationContext;
 
     @Setter
     private MessageSource messageSource;
+
     /**
-     * The default open behavior looks for a single class annotated with
-     * {@link Model}, or, if there are more than one classes annotated with
-     * {@link Model} the one that also sets {@link Model#primary()}. Having
-     * found that, the class create a new instance of that model and start a
-     * new document scope based on that model
-     *
-     * @param applicationConfiguration The {@link ApplicationConfiguration} instance
+     * The default open behavior attempts to open the "primary"
+     * model, as defined by {@link #getPrimaryModelClass()}
      */
     @HandlerFor("cmdOpen" )
     @SuppressWarnings("unused")
-    public void defaultOpenBehavior(ApplicationConfiguration applicationConfiguration) {
-        withPrimaryModel(applicationConfiguration, spwing::openModel);
+    public void defaultOpenBehavior() {
+        withPrimaryModel(spwing::openModel);
     }
 
 
+
+
+    @HandlerFor("cmdUndo")
+    @SuppressWarnings("unused")
+    public void defaultUndoBehavior(final UndoManager undoManager) {
+        undoManager.undo();
+    }
+
+
+    @EnablerFor("cmdUndo")
+    @SuppressWarnings("unused")
+    public boolean defaultEnableUndoBehavior( @Nullable final UndoManager undoManager,
+                                              @Nullable final JMenuItem menuItem ) {
+        final boolean canUndo = null != undoManager && undoManager.canUndo();
+        final String presentationString = canUndo ? undoManager.getUndoPresentationName() : "";
+        if (null != menuItem) {
+            menuItem.setText(applicationContext.getMessage("cmdUndo",
+                    new Object[]{ presentationString },
+                    Locale.getDefault()));
+        }
+        return canUndo;
+    }
+
+
+
+    @HandlerFor("cmdRedo")
+    @SuppressWarnings("unused")
+    public void defaultRedoBehavior( final UndoManager undoManager ) {
+        undoManager.redo();
+    }
+
+
+    @EnablerFor("cmdRedo")
+    @SuppressWarnings("unused")
+    public boolean defaultEnableRedoBehavior( @Nullable final UndoManager undoManager,
+                                              @Nullable final JMenuItem menuItem  ) {
+        final boolean canRedo = null != undoManager && undoManager.canRedo();
+        final String presentationString = canRedo ? undoManager.getRedoPresentationName() : "";
+        if (null != menuItem) {
+            menuItem.setText(applicationContext.getMessage("cmdRedo",
+                    new Object[]{ presentationString },
+                    Locale.getDefault()));
+        }
+        return canRedo;
+    }
+
+
+
     /**
-     * The default new behavior looks for a single class annotated with
-     * {@link Model}, or, if there are more than one classes annotated with
-     * {@link Model} the one that also sets {@link Model#primary()}. Having
-     * found that, the class create a new instance of that model and start a
-     * new document scope based on that model
-     *
-     * @param applicationConfiguration The {@link ApplicationConfiguration} instance
+     * The default new behavior attempts to create a new "primary"
+     * model, as defined by {@link #getPrimaryModelClass()}
      */
     @HandlerFor("cmdNew" )
     @SuppressWarnings("unused")
-    public void defaultNewBehavior(ApplicationConfiguration applicationConfiguration) {
+    public void defaultNewBehavior() {
         log.debug( "Executing default new behavior" );
-        withPrimaryModel(applicationConfiguration, spwing::newModel);
+        withPrimaryModel(spwing::newModel);
     }
 
 
     /**
-     * withPrimaryModel is used with the {@link #defaultNewBehavior(ApplicationConfiguration)} and
-     * {@link #defaultOpenBehavior(ApplicationConfiguration)} methods to operate on the primary
-     * model for the application. The primary model is either the only model, or the only model
-     * with a {@link Model#primary()}} value of true
+     * withPrimaryModel is a helper function to find the primary model
+     * and call a consumer function on that class.
      *
-     * @param applicationConfiguration The {@link ApplicationConfiguration}
      * @param consumer The routine to call on the model
+     * @see #getPrimaryModelClass()
      */
-    private void withPrimaryModel(ApplicationConfiguration applicationConfiguration,  Consumer<Class<?>> consumer) {
+    private void withPrimaryModel( final Consumer<Class<?>> consumer) {
 
-        // See if we can find a primary model. This will either be the only model,
-        // or the one marked primary on the Model annotation
-        BeanDefinition primaryModel = applicationConfiguration.getPrimaryModel();
+        Class<?> primaryModelClass = getPrimaryModelClass();
+        if (null != primaryModelClass) {
+            consumer.accept(primaryModelClass);
+        }
+    }
 
-        // If we have a primary model, with a valid class name, then attempt to create
-        // the model for that class.
-        if (Objects.nonNull(primaryModel) &&
-                Objects.nonNull(primaryModel.getBeanClassName()) &&
-                !primaryModel.getBeanClassName().isBlank()) {
-            try {
-                final Class<?> modelClass = Class.forName(primaryModel.getBeanClassName());
-                consumer.accept(modelClass);
-            } catch (ClassNotFoundException e) {
 
-                // This should never happen, but it keeps the compiler happy.
-                log.error("Unable to open model because class {} was not found", primaryModel.getBeanClassName());
-                throw new RuntimeException(e);
+    /**
+     * Attempt to figure out the "primary" model. This will be opened
+     * by default if no other open/new functionality is provided. The
+     * primary model is defined one of two ways:
+     * <ul>
+     *     <il>Through a bean named "primaryModel" defined at singleton
+     *     scope. This should be a Class instance denoting the class of the
+     *     primary model</il>
+     *     <il>Through a scan for the {@link ModelConfiguration} bean classes.
+     *     These beans will not be created, but the class itself will be enough
+     *     to enumerate the potential models. If there is just one, that will be
+     *     used as primary, otherwise one of these will be selected at random.</il>
+     * </ul>
+     * @return The (potentially null) primary class.
+     */
+
+    private Class<?> getPrimaryModelClass() {
+
+        if (null == primaryModelClass) {
+
+            // First test - see if there is a primaryModel bean defined.
+            if (null != applicationContext && applicationContext.containsBean("primaryModel")) {
+                Object primaryModelBean = applicationContext.getBean("primaryModel" );
+                if (primaryModelBean instanceof Class<?> primaryModelClass) {
+                    this.primaryModelClass = primaryModelClass;
+                } else {
+                    log.warn( "Bean primaryModel was defined, but is not a Class definition");
+                }
+            } else {
+
+                // The configuration doesn't provide a primary model bean.
+                // Scan for any known ModelConfiguration instances. If there is just one, it is
+                // primary by default. If not, find the first that is marked as primary
+                ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
+                scanner.addIncludeFilter(new AssignableTypeFilter(ModelConfiguration.class));
+                Set<BeanDefinition> beans = scanner.findCandidateComponents(spwing.getContextRoot().getPackageName());
+                Set<Class<?>> models = beans.stream()
+                        .map(this::configurationDefinitionToModelClass)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                if (models.size() > 1) {
+                    log.warn("Multiple models are defined, but the configuration does not define a primary model");
+                    log.warn("A random model will be used as primary");
+                    log.warn("(You can do this be putting a \"primaryModel\" bean on the application configuration" );
+                }
+
+                if (!models.isEmpty()) {
+                    this.primaryModelClass = models.iterator().next();
+                } else {
+                    log.warn( "Could not find any model configuration instances" );
+                }
             }
-        } else {
-            log.warn( "No default model was found for the open. Annotate one class with @Model, or, if there are more than one models, with @Model(primary=true)" );
+        }
+        return this.primaryModelClass;
+    }
+
+    private Class<?> configurationDefinitionToModelClass(BeanDefinition beanDefinition) {
+        try {
+
+            // Get the bean class name as a resolvable type
+            Class<?> beanClass = Class.forName(beanDefinition.getBeanClassName());
+            ResolvableType beanType = ResolvableType.forClass(beanClass);
+
+            // This should define at least the ModelConfiguration interface or it wouldn't
+            // have been captured. So get all the interfaces, and look for the ModelConfiguration
+            ResolvableType modelConfigurationInterface = Arrays.stream(beanType.getInterfaces())
+                    .filter(i -> null != i.getRawClass() && ModelConfiguration.class.isAssignableFrom(i.getRawClass()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (null != modelConfigurationInterface) {
+                return modelConfigurationInterface.getGenerics()[0].getRawClass();
+            } else {
+                return null;
+            }
+        } catch (ClassNotFoundException e) {
+            return null;
         }
     }
 
 
     @EnablerFor("cmdOpen")
     @SuppressWarnings("unused")
-    public boolean defaultEnableOpenBehavior(ApplicationConfiguration applicationConfiguration) {
+    public boolean defaultEnableOpenBehavior() {
         // See if we can find a primary model. This will either be the only model,
         // or the one marked primary on the Model annotation
-        BeanDefinition primaryModel = applicationConfiguration.getPrimaryModel();
-        if (Objects.nonNull(primaryModel) &&
-                Objects.nonNull(primaryModel.getBeanClassName()) &&
-                !primaryModel.getBeanClassName().isBlank()) {
-            try {
-
-                // Is it one we could read?
-                final Class<?> modelClass = Class.forName(primaryModel.getBeanClassName());
-                return Serializable.class.isAssignableFrom(modelClass);
-            } catch (ClassNotFoundException e) {
-
-                // This should never happen, but it keeps the compiler happy.
-                log.error("Unable to open model because class {} was not found", primaryModel.getBeanClassName());
-                return false;
-            }
-        } else {
-            return false;
-        }
+        return null != getPrimaryModelClass() && !FileChooserUtils.getActiveFileExtensions(applicationContext).isEmpty();
     }
 
     @EnablerFor("cmdNew")
     @SuppressWarnings("unused")
-    public boolean defaultEnableNewBehavior(ApplicationConfiguration applicationConfiguration) {
-        // See if we can find a primary model. This will either be the only model,
-        // or the one marked primary on the Model annotation
-        BeanDefinition primaryModel = applicationConfiguration.getPrimaryModel();
-        return (Objects.nonNull(primaryModel) &&
-                Objects.nonNull(primaryModel.getBeanClassName()) &&
-                !primaryModel.getBeanClassName().isBlank());
+    public boolean defaultEnableNewBehavior() {
+        return null != getPrimaryModelClass();
     }
 
 
 
     @HandlerFor("cmdAbout")
     @SuppressWarnings("unused")
-    public void defaultAboutBehavior(ApplicationConfiguration applicationConfiguration,
-                                     ApplicationContext applicationContext) {
+    public void defaultAboutBehavior(final Spwing spwing) {
 
         // The default behavior is to look for a readable image file
         // with the name of the application at the root of the resource
@@ -202,7 +303,7 @@ public final class BuiltInCommands implements MessageSourceAware {
             panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
             panel.add(Box.createVerticalStrut(30));
             final URL imageResource = this.getClass().getResource("Spwing.png");
-            if (Objects.nonNull(imageResource)) {
+            if (null != imageResource) {
                 BufferedImage wPic = ImageIO.read(imageResource);
                 JLabel wIcon = new JLabel(new ImageIcon(wPic));
                 wIcon.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
@@ -210,17 +311,20 @@ public final class BuiltInCommands implements MessageSourceAware {
             }
 
             panel.add(Box.createVerticalGlue());
-            final JLabel appName = new JLabel(applicationConfiguration.getApplicationName());
+            final JLabel appName = new JLabel(spwing.getApplicationName());
             appName.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
             panel.add(appName);
             panel.add(Box.createVerticalGlue());
 
-            String copyright = applicationConfiguration.getApplicationAnnotation().copyrightStatement();
-            if (!copyright.isBlank()) {
-                final JLabel copyrightLabel = new JLabel(copyright);
-                copyrightLabel.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
-                panel.add(copyrightLabel);
-                panel.add(Box.createVerticalGlue());
+            if (applicationContext.containsBean("copyright" )) {
+                String copyright = applicationContext.getBean("copyright", String.class);
+                // TODO get a message instead
+                if (!copyright.isBlank()) {
+                    final JLabel copyrightLabel = new JLabel(copyright);
+                    copyrightLabel.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+                    panel.add(copyrightLabel);
+                    panel.add(Box.createVerticalGlue());
+                }
             }
 
             final JLabel aboutSpwing = new JLabel(applicationContext.getMessage("AboutSpwing", null, Locale.getDefault()));
@@ -257,17 +361,20 @@ public final class BuiltInCommands implements MessageSourceAware {
 
     @EnablerFor("cmdClose")
     @SuppressWarnings("unused")
-    public boolean defaultEnableCloseBehavior() {
-        // Enable the default close if there are any windows that are not
-        // already disposed in the window list
-        return Objects.nonNull(spwing.getActiveModel());
+    public boolean defaultEnableCloseBehavior( @Nullable final DocumentSession documentSession,
+                                               @Nullable @Model final Object theModel) {
+
+        // Enable the default close if there is a model to close
+        return null != theModel;
     }
 
 
 
     @HandlerFor("cmdClose")
     @SuppressWarnings("unused")
-    public boolean defaultCloseBehavior(@NonNull JFrame jFrame, @NonNull Window theWindow, @NonNull @Model Object theModel) {
+    public void defaultCloseBehavior(final @NonNull JFrame jFrame,
+                                     final @NonNull Window theWindow,
+                                     final @NonNull @Model Object theModel) {
 
         log.debug( "In default close behavior: frame = {}, window = {}", jFrame, WindowUtils.getWindowTitle(theWindow));
         boolean doClose = true;
@@ -276,14 +383,13 @@ public final class BuiltInCommands implements MessageSourceAware {
         if (spwing.isCommandEnabled("cmdSave") && checkForSave(theWindow)) {
 
             // Attempt to save the file. If that works, then we can continue.
-            doClose = spwing.fireCommandWithResult("cmdSave", Boolean.class, false);
+            spwing.fireCommand("cmdSave");
         }
 
         // Close the window if everything is OK
-        if (doClose) {
-            theWindow.dispose();
-        }
-        return doClose;
+        theWindow.dispose();
+
+
     }
 
 
@@ -307,53 +413,54 @@ public final class BuiltInCommands implements MessageSourceAware {
 
 
     /**
-     * Returns TRUE if the model is a {@link Saveable} that needs to be saved;
-     * false otherwise.
+     * Returns TRUE if the model is a {@link Serializable} that the
+     * document session considers to be dirty
      *
+     * @param undoManager The undo manager
      * @param theModel The model
      * @return TRUE to enable save
      */
     @EnablerFor("cmdSave")
     @SuppressWarnings("unused")
-    public boolean defaultEnableSaveBehavior(@Model Object theModel) {
-        log.debug( "In default enable save behavior, model = {}", theModel );
-        if (theModel instanceof Saveable saveable) {
-            return saveable.needsSave();
-        } else {
-            return false;
-        }
+    public boolean defaultEnableSaveBehavior(@Nullable final CommandAwareUndoManager undoManager,
+                                             @Nullable final @Model Object theModel) {
+        return  null != theModel && null != undoManager &&
+                theModel instanceof Serializable &&
+                !FileChooserUtils.getActiveFileExtensions(applicationContext).isEmpty() &&
+                undoManager.changesHaveOccurredSinceLastCheckpoint();
     }
 
 
     /**
-     * The default save behavior looks for a model that has {@link Model#extensions()}
-     * defined and is {@link Serializable}. If both of these conditions are true, the handler
+     * The default save behavior looks checks to see if the "fileExtension" bean
+     * is present and the model is serializable. If both of these conditions are true, the handler
      * will attempt to get the file from the model, and will prompt the user for
      * the file if necessary. Once the file is achieved, if it is not the same as
      * the file already in use for the model, the user will be prompted to see if
      * they want to override that file. If so, the handler will open the file for
      * write, and serialize the model to that file. This simple behavior works
      * for manu simple model instances.<br>
-     * The default save behavior will look for the {@link Model#extensions()} array
+     * The default save behavior will look for the fileExtension bean
      * to see what types to use. The first type will be used by default.
      * @param documentSession The {@link DocumentSession} instance containing information about the document
-     * @return TRUE if the save was successful
      */
     @HandlerFor("cmdSave")
     @SuppressWarnings("unused")
-    public boolean defaultSaveBehavior(@NonNull DocumentSession documentSession) {
+    public void defaultSaveBehavior(final DocumentSession documentSession,
+                                       final @Model Object theModel,
+                                       final @Nullable JFrame jFrame ) {
 
-        log.debug( "In default save behavior, document session = {}", documentSession);
-        Object theModel = documentSession.getModel();
+        // Get the list of extensions
+        List<String> fileExtensions = FileChooserUtils.getActiveFileExtensions(applicationContext);
 
         // Make sure the model is file based and serializable
-        if (theModel instanceof Serializable serializable) {
+        if (theModel instanceof Serializable serializable && !fileExtensions.isEmpty()) {
 
             // Get the file to write to. Validate that it is either new, the same file as the model
             // already has, or the user wants to override.
             //TODO Make sure this save doesn't override another open model file.
-            File targetFile = getFilePromptingIfNecessary(documentSession);
-            if (Objects.nonNull(targetFile) && (!targetFile.exists() || targetFile.equals(documentSession.getAssociatedFile()) || promptForOverride(targetFile))) {
+            File targetFile = getFilePromptingIfNecessary(documentSession, fileExtensions);
+            if (null != targetFile && (!targetFile.exists() || targetFile.equals(documentSession.getAssociatedFile()) || promptForOverride(targetFile))) {
 
                 // Create a new file output and object output stream
                 try (FileOutputStream fos = new FileOutputStream(targetFile);
@@ -363,20 +470,22 @@ public final class BuiltInCommands implements MessageSourceAware {
                     objectOutput.writeObject(serializable);
                     documentSession.setAssociatedFile(targetFile);
 
-                    // TODO Need mechanism to clear dirty bit on model
+                    // Mark the last checkpoint on the undo stack, so we know if we need to save again
+                    documentSession.getUndoManager().checkpoint();
 
-                    // All good
-                    return true;
+                    // Change the window name
+                    if (null != jFrame) {
+                        jFrame.setTitle(targetFile.getName());
+                    }
+
                 } catch (IOException e) {
                     log.error("Unable to save to file {}", targetFile.getName(), e);
-                    spwing.postErrorDialog( "err_FileCannotBeWritten", targetFile.getName(), e );
-                    return false;
+                    spwing.postErrorDialog("err_FileCannotBeWritten", targetFile.getName(), e);
+                    throw new RuntimeException(e);
                 }
             } else {
-                return false;
+                throw new RuntimeException("User cancelled save" );
             }
-        } else {
-            return true;
         }
     }
 
@@ -407,14 +516,16 @@ public final class BuiltInCommands implements MessageSourceAware {
      *
      * @return The file
      */
-    private File getFilePromptingIfNecessary(@NonNull DocumentSession documentSession) {
-        if (Objects.isNull(documentSession.getAssociatedFile())) {
+    private File getFilePromptingIfNecessary(final DocumentSession documentSession,
+                                             final List<String> fileExtensions) {
+
+        if (null == documentSession.getAssociatedFile()) {
 
             // Build a new file chooser
             JFileChooser fileChooser = new JFileChooser();
 
             // Get the file filters associated with this model class
-            fileChooserUtils.buildFileFiltersForModel(fileChooser, documentSession.getModel());
+            fileChooserUtils.buildFileExtensionFilters(fileChooser, fileExtensions);
 
             // Present the save dialog and get the option from the user
             int option = fileChooser.showSaveDialog(null);
@@ -443,12 +554,14 @@ public final class BuiltInCommands implements MessageSourceAware {
         // we cancel the quit
         for (Window window : windows) {
 
-            // By supplying the target window here, we override the
-            // default window injected value (the front window) in the
-            // invoker. Also, we get a boolean back from the command
-            // to determine whether to continue or break this loop.
-            boolean result = spwing.fireCommandWithResult("cmdClose", Boolean.class, false, window, response );
-            if (!result) {
+            try {
+                // By supplying the target window here, we override the
+                // default window injected value (the front window) in the
+                // invoker.
+                spwing.fireCommand("cmdClose",
+                        ParameterResolution.forClass(Window.class,window),
+                        ParameterResolution.forClass(QuitResponse.class,response));
+            } catch (RuntimeException e) {
                 response.cancelQuit();
                 return;
             }

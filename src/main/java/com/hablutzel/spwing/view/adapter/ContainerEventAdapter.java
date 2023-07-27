@@ -16,7 +16,10 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.Invoker;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
 import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
@@ -24,9 +27,8 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ContainerAdapter;
 import java.awt.event.ContainerEvent;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 
 @Slf4j
@@ -37,8 +39,9 @@ public class ContainerEventAdapter extends ComponentEventAdapter {
 
     private final Container container;
 
-    public ContainerEventAdapter(Container container) {
-        super(container);
+    public ContainerEventAdapter(final Container container,
+                                 final Spwing spwing) {
+        super(container, spwing);
         this.container = container;
     }
 
@@ -80,7 +83,7 @@ public class ContainerEventAdapter extends ComponentEventAdapter {
     }
 
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(Container.class, () -> container);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        return Set.of(ParameterResolution.forClass(Container.class, container));
     }
 }

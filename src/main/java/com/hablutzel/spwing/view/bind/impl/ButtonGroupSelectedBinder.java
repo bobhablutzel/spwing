@@ -15,11 +15,8 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.watch;
+package com.hablutzel.spwing.view.bind.impl;
 
-import com.hablutzel.spwing.events.DocumentEvent;
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.events.DocumentEventInvoker;
 import com.hablutzel.spwing.util.EnumerationStream;
 import com.hablutzel.spwing.view.bind.Accessor;
 import com.hablutzel.spwing.view.bind.Binder;
@@ -35,7 +32,6 @@ import javax.swing.*;
 import java.awt.event.ItemListener;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 
 @Service
@@ -75,7 +71,7 @@ public class ButtonGroupSelectedBinder implements Binder {
                      @NonNull final String propertyName,
                      @NonNull final Object targetObjectValue,
                      @NonNull final Accessor authoritativeValueAccessor,
-                     @NonNull final List<String> triggers,
+                     @NonNull final List<RefreshTrigger> triggers,
                      @NonNull final ApplicationContext applicationContext) {
 
         ConversionService conversionService = applicationContext.getBean(ConversionService.class);
@@ -86,9 +82,8 @@ public class ButtonGroupSelectedBinder implements Binder {
             setComponentValue(targetObjectValue, authoritativeValueAccessor, conversionService, buttonGroup);
 
             // Set up listeners so that the buttons get updated if any of the events are fired.
-            DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
-            final DocumentEventInvoker invoker = buildInvoker(targetObjectValue, authoritativeValueAccessor, applicationContext, conversionService, buttonGroup);
-            triggers.forEach(trigger -> documentEventDispatcher.registerListener(trigger, invoker));
+            triggers.forEach( trigger -> trigger.onRefresh( () ->
+                    setComponentValue(targetObjectValue, authoritativeValueAccessor, conversionService, buttonGroup)));
 
             // Watch the buttons.
             ItemListener itemListener = event -> {
@@ -114,22 +109,12 @@ public class ButtonGroupSelectedBinder implements Binder {
     }
 
 
-    private DocumentEventInvoker buildInvoker(Object targetObjectValue, Accessor authoritativeValueAccessor, ApplicationContext applicationContext, ConversionService conversionService, ButtonGroup buttonGroup) {
-        return new DocumentEventInvoker(applicationContext) {
-            @Override
-            protected void handleDocumentEvent(DocumentEvent documentEvent) {
-                setComponentValue(targetObjectValue, authoritativeValueAccessor, conversionService, buttonGroup);
-            }
-        };
-    }
-
-
     private void setComponentValue(Object targetObjectValue, Accessor authoritativeValueAccessor, ConversionService conversionService, ButtonGroup buttonGroup) {
         if (targetObjectValue instanceof Map<?,?> buttonValues) {
             switch (bindingTo) {
                 case String, Enum -> {
                     String value = conversionService.convert(authoritativeValueAccessor.get(), String.class);
-                    if (Objects.nonNull(value)) {
+                    if (null != value) {
                         EnumerationStream.stream(buttonGroup.getElements()).forEach(button -> {
                             Object buttonValue = buttonValues.get(button);
                             buttonGroup.setSelected(button.getModel(), value.equals(buttonValue));

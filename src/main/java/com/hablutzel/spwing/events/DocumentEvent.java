@@ -19,14 +19,33 @@ package com.hablutzel.spwing.events;
 import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
+
+/**
+ * Spwing supports a document-based event mechanism
+ * based on the Spring {@link ApplicationEvent} structures.
+ * In this approach, the events are scoped to the document
+ * scope, so two open models will not receive each others
+ * events.
+ * @author Bob Hablutzel
+ */
 public class DocumentEvent extends ApplicationEvent {
 
-
+    /**
+     * The name of the event.
+     */
     @Getter
     private final String eventName;
 
+
+    /**
+     * Constructor.
+     *
+     * @param source The source object
+     * @param eventName The event name
+     */
     public DocumentEvent(Object source, String eventName ) {
         super(source);
         this.eventName = eventName;
     }
+
 }

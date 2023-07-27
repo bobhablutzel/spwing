@@ -18,7 +18,6 @@ package com.hablutzel.spwing.context;
 
 
 import com.hablutzel.spwing.Spwing;
-import com.hablutzel.spwing.annotations.Model;
 import com.hablutzel.spwing.component.CommandMethods;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.util.BeanUtils;
@@ -28,7 +27,10 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -64,37 +66,6 @@ public class DocumentScopeManager {
 
     @Setter
     private Spwing spwing;
-
-    /**
-     * Store a bean in the current document scope.
-     *
-     * @param beanName The bean name
-     * @param bean     The bean
-     */
-    public void storeBeanInActiveDocumentBeanStore(String beanName, Object bean) {
-        currentDocumentID.withOptimisticRead(documentID -> {
-            if (Objects.nonNull(documentID)) {
-                final DocumentSession documentSession = documentSessionMap.get(documentID);
-                documentSession.addBeanToScope(beanName, bean);
-            } else {
-                log.error("No active document when storing into bean store");
-            }
-        });
-    }
-
-
-    /**
-     * Returns the active handlers for this document session. These
-     * are objects that are annotated with {@link com.hablutzel.spwing.annotations.Handler}
-     * (or meta-annotated, for example {@link Model} and {@link com.hablutzel.spwing.annotations.Controller}
-     * classes, that should be scanned for methods that are can handle commands or listen
-     * to events.
-     *
-     * @return The active handler list
-     */
-    public List<Object> getActiveHandlers() {
-        return currentDocumentID.withOptimisticRead(id -> id == null ? null : documentSessionMap.get(id).getAvailableHandlers());
-    }
 
 
 
@@ -175,6 +146,11 @@ public class DocumentScopeManager {
     }
 
 
+    public void resetScope(final UUID documentScopeID) {
+        currentDocumentID.replace(id -> documentScopeID);
+    }
+
+
 
     public void activateScope(final UUID documentScopeID) {
         currentDocumentID.replace( currentDocumentID -> {
@@ -183,16 +159,13 @@ public class DocumentScopeManager {
             } else {
 
                 // Remove the current document scope (if any)
-                if (Objects.nonNull(currentDocumentID)) {
+                if (null != currentDocumentID) {
                     deactivateScopeUnderLock();
                 }
 
-                // Push this scope in the context
-                DocumentSession documentSession = documentSessionMap.get(documentScopeID);
-                BeanUtils.pushBean(applicationContext, documentSession);
-
                 // Give Spwing the heads up so it can rebuild the menus if needed
-                if (Objects.nonNull(spwing)) {
+                DocumentSession documentSession = documentSessionMap.get(documentScopeID);
+                if (null != spwing) {
                     spwing.documentSessionChanged(documentSession.getAvailableHandlers());
                 }
 
@@ -219,10 +192,10 @@ public class DocumentScopeManager {
      * @param documentID The document ID
      */
     public void disposeDocumentScope(UUID documentID ) {
+        documentSessionMap.remove(documentID);
         currentDocumentID.replace( currentID -> {
             if (currentID.equals(documentID)) {
                 deactivateScopeUnderLock();
-                documentSessionMap.remove(documentID);
                 return null;
             } else {
                 return currentID;
@@ -240,45 +213,23 @@ public class DocumentScopeManager {
      * Create a new document session with the given model object
      * populated.
      *
-     * @param modelObject The model object to seed the document scope
+     * @param documentSession The newly created {@link DocumentSession} instance
      */
-    public UUID establishSession(final DocumentSession documentSession, final Object modelObject) {
+    public UUID establishSession(final DocumentSession documentSession) {
 
         // Create a new document session ID
         UUID result = UUID.randomUUID();
-
-        // Set up a new document session for this model object
-        documentSession.addBeanToScope(modelObject.getClass().getSimpleName(), modelObject);
+        documentSession.setId(result);
         documentSessionMap.put(result, documentSession);
 
         // Activate our new scope
         this.activateScope(result);
 
-        // If the model class implements any of the framework aware classes, make sure
-        // they are handled here (the normal post-create factory is skipped for these model objects)
-        simulatePostCreateBehaviors(modelObject);
-
-        log.debug( "Created new document session {} based on {}", result, modelObject );
+        log.debug( "Created new document session {} ", result );
         return result;
     }
 
 
-
-    /**
-     * When creating a new document session, we use a model object as a
-     * seed for the session. That object is created in the framework
-     * code and passed in. That's fine, except some key activities that
-     * occur when a new object is created - notably calling
-     * the bean post-initialization process and stamping the bean with
-     * framework injected values doesn't happen. This routine
-     * simulates that automatic behavior on behalf of the created bean.
-     *
-     * @param modelObject The model object
-     */
-    private void simulatePostCreateBehaviors(Object modelObject) {
-        applicationContext.getAutowireCapableBeanFactory()
-                .applyBeanPostProcessorsAfterInitialization(modelObject, modelObject.getClass().getSimpleName());
-    }
 
 }
 

@@ -141,7 +141,7 @@ dimension
     ;
 
 bindStatement
-    :   target=targetClause op=(BIND_OP|PROPERTY_BIND_OP) (rootClause)? expression=String_Literal triggerClause?
+    :   target=targetClause BIND_OP (rootClause)? expression=String_Literal triggerClause?
     ;
 
 targetClause
@@ -160,7 +160,6 @@ groupTargetClause
 rootClause
     :   OPAREN
         (   m='model'
-        |   c='controller'
         |   b=Identifier
         )? CPAREN
     ;
@@ -288,7 +287,6 @@ HASH : '#';
 AT : '@';
 DASH : '-';
 BIND_OP : '=>';
-PROPERTY_BIND_OP : '==>';
 
 /**
  * Lexical representation for an integer

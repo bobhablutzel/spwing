@@ -16,23 +16,51 @@
 
 package com.hablutzel.spwing.view.adapter;
 
+import com.hablutzel.spwing.Spwing;
+import com.hablutzel.spwing.invoke.ParameterDescription;
+import com.hablutzel.spwing.invoke.ParameterResolution;
+
 import javax.swing.*;
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Function;
 
 
+/**
+ * Event adapter for the JCheckBox class. Mostly
+ * a pass through to the {@link AbstractButtonEventAdapter}
+ * @author Bob Hablutzel
+ */
 public final class JCheckboxEventAdapter extends AbstractButtonEventAdapter {
 
+    /**
+     * The JCheckBox
+     */
     private final JCheckBox checkBox;
 
-    public JCheckboxEventAdapter(JCheckBox checkBox) {
-        super(checkBox);
+    /**
+     * Constructor.
+     * @param checkBox The checkbox
+     * @param spwing The Spwing framework instance
+     */
+    public JCheckboxEventAdapter(final JCheckBox checkBox,
+                                 final Spwing spwing) {
+        super(checkBox, spwing);
         this.checkBox = checkBox;
     }
 
+
+    /**
+     * Inject the checkBox into the parameters
+     *
+     * @return A map with the check box supplier
+     */
     @Override
-    protected Map<Class<?>, Supplier<Object>> getParameterMap() {
-        return Map.of(JCheckBox.class, () -> checkBox, Boolean.class, checkBox::isSelected);
+    protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
+        Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
+        result.add(ParameterResolution.forClass(JCheckBox.class, checkBox));
+        result.add(ParameterResolution.forClass(Boolean.class, checkBox.isSelected()));
+        return result;
     }
 
 }

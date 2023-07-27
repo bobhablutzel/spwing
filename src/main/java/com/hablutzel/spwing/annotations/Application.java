@@ -21,7 +21,11 @@ import com.hablutzel.spwing.laf.LookAndFeelFactory;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-import java.lang.annotation.*;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 
 /**
@@ -43,6 +47,7 @@ public @interface Application {
      * Defines a menu event that should be triggered when the UI is
      * started. By default, this performs a new. You can choose
      * a different command or cmdNOP to do nothing.
+     * @return The command to fire at startup
      */
     String onStart() default "cmdNew";
 
@@ -58,13 +63,16 @@ public @interface Application {
     /**
      * Allow the user to define the application name. This will default to
      * empty string, which will then use the name of the application class
+     * @return The application name
      */
     String applicationName() default "";
 
     /**
      * Define the look and feel for the application. Defaults to "Metal".
      * On MacOS, highly recommend FlatMac look and feel
+     * @return A {@link LookAndFeelFactory} instance.
      */
+    // TODO create LAFFactory that is platform aware
     Class<? extends LookAndFeelFactory> lookAndFeel() default DefaultLookAndFeelFactory.class;
 
     /**

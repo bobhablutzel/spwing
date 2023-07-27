@@ -21,10 +21,10 @@ import com.hablutzel.spwing.annotations.EnablerFor;
 import com.hablutzel.spwing.annotations.Handler;
 import com.hablutzel.spwing.annotations.HandlerFor;
 import com.hablutzel.spwing.annotations.ListenerFor;
-import com.hablutzel.spwing.context.EventAdapter;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.events.EventNameDeterminant;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
+import com.hablutzel.spwing.view.adapter.EventAdapter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
@@ -37,7 +37,11 @@ import javax.swing.*;
 import java.awt.event.MouseEvent;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -201,10 +205,10 @@ public class CommandMethodsScanner {
             // We have a handler if the methodFlag is "handler" or the method has a HandlerFor
             // annotation
             final ReflectiveInvoker reflectiveInvoker = new ReflectiveInvoker(applicationContext, documentComponent, method);
-            if ("handle".equals(methodFlag) || Objects.nonNull(handlerFor)) {
+            if ("handle".equals(methodFlag) || null != handlerFor) {
                 // It is a handler, link this to the handler in the action list
                 defineHandler(methodNameSuffix, handlerFor, reflectiveInvoker);
-            } else if ("enable".equals(methodFlag) || Objects.nonNull(enablerFor)) {
+            } else if ("enable".equals(methodFlag) || null != enablerFor) {
                 // It is an enabler, associated it with the command action.
                 defineEnabler(methodNameSuffix, enablerFor, reflectiveInvoker);
             } else if (!listenerForSet.isEmpty()) {
@@ -237,19 +241,19 @@ public class CommandMethodsScanner {
 
             // This can only be null when no view is open - meaning no AWT events.
             // Nothing to do here in that case
-            if (Objects.nonNull(documentEventDispatcher)) {
+            if (null != documentEventDispatcher) {
 
                 // Get the event adapter map from the document event dispatcher.
                 // This knows about all the names AWT components.
                 final Map<String, EventAdapter> eventAdapterMap = documentEventDispatcher.getEventAdapterMap();
 
                 // If we have a target name specified, get that specific adapter
-                if (Objects.nonNull(targetName) && !targetName.isBlank()) {
+                if (null != targetName && !targetName.isBlank()) {
                     EventAdapter eventAdapter = eventAdapterMap.get(targetName);
 
                     // If the event adapter already understands the event name, use it.
                     // Otherwise try the lower-case version
-                    if (Objects.nonNull(eventAdapter) && !eventAdapter.understands(proposedEventName)) {
+                    if (null != eventAdapter && !eventAdapter.understands(proposedEventName)) {
                         String testName = lowerCaseFirst(proposedEventName);
                         if (eventAdapter.understands(testName)) {
                             return testName;
@@ -288,7 +292,7 @@ public class CommandMethodsScanner {
          * @return
          */
         private String sanitizeTargetName(String proposedName) {
-            if (Objects.nonNull(proposedName) && !proposedName.isBlank() && Objects.nonNull(documentEventDispatcher)) {
+            if (null != proposedName && !proposedName.isBlank() && null != documentEventDispatcher) {
                 final Map<String, EventAdapter> eventAdapterMap = documentEventDispatcher.getEventAdapterMap();
                 if (!eventAdapterMap.containsKey(proposedName)) {
                     String testName = lowerCaseFirst(proposedName);
@@ -304,13 +308,13 @@ public class CommandMethodsScanner {
         }
 
         private void defineEnabler(String methodNameSuffix, EnablerFor enablerFor, ReflectiveInvoker reflectiveInvoker) {
-            String commandID = Objects.nonNull(enablerFor) ? enablerFor.value() : methodNameToCommandName(methodNameSuffix);
+            String commandID = null != enablerFor ? enablerFor.value() : methodNameToCommandName(methodNameSuffix);
             getCommandMethods(commandID).setEnabler(reflectiveInvoker);
         }
 
 
         private void defineHandler(String methodNameSuffix, HandlerFor handlerFor, ReflectiveInvoker reflectiveInvoker) {
-            String commandID = Objects.nonNull(handlerFor) ? handlerFor.value() : methodNameToCommandName(methodNameSuffix);
+            String commandID = null != handlerFor ? handlerFor.value() : methodNameToCommandName(methodNameSuffix);
             getCommandMethods(commandID).setHandler(reflectiveInvoker);
         }
 
@@ -322,7 +326,7 @@ public class CommandMethodsScanner {
         private void defineListener(ReflectiveInvoker reflectiveInvoker, String eventName, String target, EventFamily eventFamily) {
 
 
-            if (Objects.nonNull(documentEventDispatcher)) {
+            if (null != documentEventDispatcher) {
                 // Use the family passed in, or attempt to guess if needed.
                 EventFamily family = eventFamily == EventFamily.Introspection
                         ? determineEventFamily(eventName)
@@ -330,9 +334,9 @@ public class CommandMethodsScanner {
 
                 if (family == EventFamily.AWT) {
                     Map<String, EventAdapter> eventAdapterMap = documentEventDispatcher.getEventAdapterMap();
-                    if (Objects.nonNull(target) && !target.isBlank()) {
+                    if (null != target && !target.isBlank()) {
                         EventAdapter eventAdapter = eventAdapterMap.get(target);
-                        if (Objects.nonNull(eventAdapter) && eventAdapter.understands(eventName)) {
+                        if (null != eventAdapter && eventAdapter.understands(eventName)) {
                             eventAdapter.attachListener(eventName, reflectiveInvoker);
                         } else {
                             log.warn("Unknown AWT event {} ignored - no listener available", eventName);
@@ -353,14 +357,14 @@ public class CommandMethodsScanner {
 
 
         private String toDocumentEvent(String name) {
-            return Objects.nonNull(eventNameDeterminant)
+            return null != eventNameDeterminant
                     ? eventNameDeterminant.toDocumentEvent(name)
                     : String.format("evt%s", name);
         }
 
 
         private EventFamily determineEventFamily(String eventName) {
-            EventFamily result = Objects.nonNull(eventNameDeterminant)
+            EventFamily result = null != eventNameDeterminant
                     ? eventNameDeterminant.examineName(eventName)
                     : EventFamily.Introspection;
 
