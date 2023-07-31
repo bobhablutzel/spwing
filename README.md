@@ -76,7 +76,11 @@ application with a label that displays the value of a model element. Demonstrate
 the basic components of Spwing (Application, Model, Controller, View) and introduces
 the SVWF view layout language. Demonstrates unidirectional binding of a Swing component
 to the value of a model element. Demonstrates how handler methods are associated with 
-view components and how the model can be passed to handler methods. *Requires Spwing 0.5 or later*
+view components and how the model can be passed to handler methods. *Requires Spwing 0.6.0 or later*
+
+
+    The SpwingLabelButtonDemo is discussed in detail below.
+  
 - [SpwingBoundTextFieldDemo](https://github.com/bobhablutzel/SpwingBoundTextFieldDemo): Builds
 on the SpwingLabelButtonDemo, adding bi-directional binding of view elements to model
 properties. In this demo you can update the model text field by typing or by button, and
@@ -147,12 +151,20 @@ all one class. That was used in the HelloWorld example above.]
 ## Example Application
 The following example application is hosted at [SpwingLabelButtonDemo](https://github.com/bobhablutzel/SpwingLabelButtonDemo.git).
 It displays a window with a label and button; when you click the button the label changes. This demonstrates
-the view creation and binding features of the framework.
+the view creation and binding features of the framework. This demo is intentionally stripped down, so does 
+not demonstrate custom menus, command handler implementations, event processing (other than signalling a property change),
+file handling, undo processing, platform specific resources, document beans, or other key features.
+
+The basic Spwing application has four components: the application, the model, the view, and the controller.
+The application is created once at startup time. The model, view, and controller are created once for
+each document that is opened. This generally corresponds to a window or a file in the multi-window document
+paradigm.
 
 The main application code has the responsibility of initializing the framework. 
 It does this by passing the ```contextRoot```, which is a class (usually the application
 class itself, as in this example) that is in a package at the root of the package
-hierarchy for the application
+hierarchy for the application. The context root tells the framework where and how
+to find the other classes.
 
 ### The application class
 
@@ -162,6 +174,9 @@ package com.hablutzel.spwingDemo;
 
 import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.annotations.Application;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Service;
 
 
 /**
@@ -171,38 +186,78 @@ import com.hablutzel.spwing.annotations.Application;
  * all the key objects - they will be in the same
  * package or a subpackage.
  */
-@Application
+@Service
+@Scope("singleton")
 public class SpwingLabelButtonDemo {
 
-    public static void main(String[] args) {
+  public static void main(String[] args) {
 
-        // Launch Spwing
-        Spwing.launch(SpwingLabelButtonDemo.class);
-    }
+    // Launch Spwing
+    Spwing.launch(SpwingLabelButtonDemo.class);
+  }
+
+  @Bean
+  @Scope("singleton")
+  public String launchCommand() {
+    return "cmdNew";
+  }
+
 }
+
 ```
 
-The application class is annotated as an ```Application```. That
-doesn't do much in this example, but gives an opportunity to 
-provide some configuration values and the like. The main function
-of this class is to call ```Spring.launch```
+The application is a singleton Spring service. As a Spring
+service, it can create beans as demonstrated wtih the ```launchCommand```
+method. Spwing uses beans created by the application (and
+later by the ```ModelConfiguration```) to control certain aspects
+of execution. In this case, the ```launchCommand``` bean provides the
+command - which is a string associated with a menu item - to fire 
+when the application starts.
+
+Note that the demo application does not define a menu bar. Spwing
+defines a default one that includes the New command ("cmdNew"). You
+can override this menu at the application or document level, but for
+this simple application the default suffices. Spwing also defines
+some built in functionality associated with common commands. So ```cmdNew```
+is handled automatically by the framework to create a new document, ```cmdClose```
+closes the current window, ```cmdAbout``` displays an About box, etc.
+All of these default applications can be simply overridden just by 
+declaring routines that handle those commands.
+
+In the demo application, the application context root is the application 
+and the application contains the ```main``` method. Neither of those is a requirement.
 
 ### The model class
 The model class describes the data in the MVC architecture. The model
-contains the state for the document; each document has it's own copy
-of the model object and therefore it's own state. 
+contains the state for the document; each document has its own copy
+of the model object and therefore its own state. 
 
-By convention, the model class name ends in "Model".
+Spwing attempts to keep as much framework functionality out of the model
+class as possible; put another way you should be able to take a Spwing
+model and use it without change outside the Spwing framework. In fact, the 
+only requirement is that the model has some way of signalling that properties
+have changed (so that the views can be kept in sync). Spwing supports its own
+```DocumentEvent``` structure based on the Spring ```ApplicationEvent```, but more commonly
+models will implement ```PropertyChangeListeners``` based on the java.bean standard.
+This can be done by inheriting from ```PropertyEditor```, inheriting from the Spwing
+class ```PropertyChangeModel```, or simply declare a routine  ```addPropertyChangeListener```
+that takes a ```PropertyChangeListener``` instance, either directly or via inheritance.
+
+In this demo, the model is defined as a Spring service at "document" scope. The "document"
+scope is defined by the Spwing framework and contains all the state for a given document.
+Spwing supports a ```ModelConfiguration``` interface that can declare the model bean without
+having to put Spring annotations on it, but this is outside the scope of this simple demo.
 
 ```Java
 package com.hablutzel.spwingDemo;
 
 
 import com.hablutzel.spwing.annotations.Model;
+import com.hablutzel.spwing.model.ModelConfiguration;
+import com.hablutzel.spwing.model.PropertyChangeModel;
 import lombok.Getter;
-
-import java.io.Serial;
-
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Service;
 
 /**
  * The main model for the demo. The model contains a
@@ -217,12 +272,10 @@ import java.io.Serial;
  * can automatically detect when the model changes and
  * save the file as necessary.
  */
-@Model(extensions = {"txt"})
-public class SpwingLabelButtonDemoModel extends BaseModel {
-
-    @Serial
-    private static final long serialVersionUID = 78432508723L;
-
+@Service
+@Scope("document")
+public class SpwingLabelButtonDemoModel extends PropertyChangeModel
+                                        implements ModelConfiguration<SpwingLabelButtonDemoModel> {
 
     /**
      * The data for this model - a simple text field.
@@ -236,10 +289,10 @@ public class SpwingLabelButtonDemoModel extends BaseModel {
      * a document event when the text field changes. The
      * model signals this by noting that the state changed,
      * with the event to signal. This is functionality inherited
-     * from the {@link BaseModel} class. Inheriting from this
+     * from the {@link PropertyChangeModel} class. Inheriting from this
      * class is <b>not</b> required by the framework, but it
      * does provide some useful functionality such as the
-     * {@link BaseModel#stateChanged(String)}
+     * {@link PropertyChangeModel#signalChange(String, Object, Object)}
      *
      * @param textField The new value of the field
      */
@@ -248,19 +301,81 @@ public class SpwingLabelButtonDemoModel extends BaseModel {
         // Save the new value, and signal the change
         // This is sufficient for the bound label to be
         // updated in the view.
+        String oldValue = this.textField;
         this.textField = textField;
-        this.stateChanged("evtTextFieldChanged");
+        this.signalChange("textField", oldValue, textField );
     }
 }
 ```
 
 As mentioned in the code comments, the state for the model is held 
-in the ```textField``` member. This example uses the ```BaseModel```
+in the ```textField``` member. This example uses the ```PropertyChangeModel```
 as a base. This is not required by the framework, but provides a helper
-function ```stateChanged``` which can be called when the state of a field
-changes. The ```stateChanged``` method signals a document exception, which
+function ```signalChange``` which can be called when the state of a field
+changes. The ```signalChange``` method signals a property state change, which
 in turn triggers updates to the bound view objects.
 
+
+### The view file
+Spwing uses a declarative language to define the views. This further enforces
+the separation of concerns between the model, view, and controller but also provides
+a simplified syntax designed to make defining complicated view structures easy. The
+view language is held in a .svwf (Spwing VieW File) file. You can, of course, still use
+direct Swing code if you prefer, though (again) this simple demo does not illustrate that.
+
+The svwf file is associated with the model by name - for the model SpwingLabelButtonDemoModel, 
+the view file is SpwingLabelButtonDemoView.svwf. For classes that do not follow the 
+convention of ending with "Model", the model class name itself will also be used to find the file.
+
+```java
+/* Define the components of our view
+ *
+ * - A Frame that contains the elements
+ * - A label displaying text from the model
+ * - A button to change the text in the model
+ */
+components {
+    frame: JFrame(preferredSize=(400, 200));
+    label: JLabel(horizontalAlignment=$CENTER); // Note the use of SwingConstants.CENTER
+    button: JButton(text="Click me");
+}
+
+// Bind the label to the text field. This is on the model by
+// default but we can specify other beans instead.
+// Since we want the text to automatically update when the
+// text changes, the model uses a PropertyChangeListener and
+// signals changes to "textField" when the value changes in the model
+// The Spwing framework automatically handles signal cycles.
+bind {
+    label.text => "textField";
+}
+
+// Layout the frame, with the label in the center and the button at the bottom
+layout {
+    frame: borderLayout(center=label, south=button);
+}
+
+```
+
+The view file contains definitions for components, how they bind to the model, and how
+they are laid out. This demo has three components: a frame, a label, and a button. Components
+have names; these are used for event processing and can also be used to inject the component
+into the controller if needed. The properties of the components can be set by name, and
+as the ```horizontalAlignment``` property demonstrates Spwing defines some constants as well.
+The view definition language also allows for the setting of defaults by component type, 
+defining custom colors, font, etc.
+
+The ```bind``` clause ties a view element to a model element. This binding is generally
+bidirectional. If the model supports PropertyChangeListeners, the bidirectional binding is 
+automatic. If not, you can implement custom event binding. In this example, the text field 
+```label``` is bound to the model property ```textField``` such that if the text field on
+the model changes, the label will automatically change as well.
+
+The button component defines a push button control. The logic for the button control is 
+handled in the controller, discussed below.
+
+Finally, the ```layout``` clause shows how it all fits together. Spwing supports a variety of
+layouts including Box, Border, Flow, GridBag and Button Bars.
 
 ### The controller class
 The controller class has the responsibility of reacting to user actions. It 
@@ -268,13 +383,33 @@ can listen for events coming from the Swing components, menu items, and the like
 This functionality *could* be implemented directly in the model as well (the framework
 doesn't care) but conceptually it is useful to have it in a separate class.
 
-By convention, the controller class name ends in "Controller".
+The controller is a Spwing specific component, and is associated with the model
+through the ```ControllerFor``` generic interface. 
+
+In this demo, the controller defines a single method: ```onButton_Clicked```. This
+is associated with handling the button actions through convention: the method name 
+denotes the view component (```button```) and action (```clicked```) that the method
+handles. If you follow this convention, nothing more needs be done to connect the 
+method with the view component. 
+
+Spwing supports extremely flexible parameter definition for event handles (also for
+command handlers and enablers). Basically, if Spwing can figure out a reasonable 
+value for the parameter, it will supply it. In this case, the routine takes a model
+object; since there is just one model for each document and the controller lives in the 
+same document data space, that model is automatically provided. It must be stressed that
+the parameters for the handler *are not defined by the framework*. The user defines what
+parameters are needed; these can include beans, framework artifacts (such as the Spwing
+instance), environment variables, and a host of other things. The ```Invoker``` class
+is responsible for this bit of Spwing magic. See more on that below.
+
 
 ```Java
 package com.hablutzel.spwingDemo;
 
 
-import com.hablutzel.spwing.annotations.Controller;
+import com.hablutzel.spwing.model.ControllerFor;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Service;
 
 
 /**
@@ -286,92 +421,67 @@ import com.hablutzel.spwing.annotations.Controller;
  * For this demo, the button reacts by changing
  * the text of the model.
  */
-@Controller
-public class SpwingLabelButtonDemoController {
+@Service
+@Scope("document")
+public class SpwingLabelButtonDemoController implements ControllerFor<SpwingLabelButtonDemoModel> {
 
-    /**
-     * Handle the button click. Note that no wiring
-     * is required for this method; the name of the
-     * method defines the purpose through convention
-     * and the arguments are automatically provided
-     * by the framework.<br>
-     * Specifically, this method is the handler for
-     * an AWT event. The event is "Clicked", which is
-     * an alias for the native "actionPerformed" event.
-     * The method is identified as an event handler
-     * because the name of the method begins with "on".
-     * It is identified as being a handler for a specific
-     * view component because the name of the component
-     * (from the SVWF file) comes before the name of the
-     * event, separated by an underscore. The rest of
-     * the name "Clicked" defines the event to listen for.
-     * (In order to keep more natural camelCase syntax, the
-     * name could be "onButton_Clicked" or "onButton_clicked").<br>
-     * The model parameter is the currently active model.
-     * The Spwing framework will associate this automatically
-     * with the active model by class matching - the model has the
-     * class {@link SpwingLabelButtonDemoModel}. The parameter
-     * is optional, but is needed in this case. The parameter list
-     * is very flexible for event methods; see the Spwing
-     * documentation for more details.<br>
-     * Since the compiler doesn't see that the method is
-     * called (it is called via reflection), we suppress the
-     * unused warnings.<br>     *
-     * @param model The active model.
-     */
-    @SuppressWarnings("unused")
-    public void onButton_Clicked( SpwingLabelButtonDemoModel model) {
+  /**
+   * Handle the button click. Note that no wiring
+   * is required for this method; the name of the
+   * method defines the purpose through convention
+   * and the arguments are automatically provided
+   * by the framework.<br>
+   * Specifically, this method is the handler for
+   * an AWT event. The event is "Clicked", which is
+   * an alias for the native "actionPerformed" event.
+   * The method is identified as an event handler
+   * because the name of the method begins with "on".
+   * It is identified as being a handler for a specific
+   * view component because the name of the component
+   * (from the SVWF file) comes before the name of the
+   * event, separated by an underscore. The rest of
+   * the name "Clicked" defines the event to listen for.
+   * (In order to keep more natural camelCase syntax, the
+   * name could be "onButton_Clicked" or "onButton_clicked").<br>
+   * The model parameter is the currently active model.
+   * The Spwing framework will associate this automatically
+   * with the active model by class matching - the model has the
+   * class {@link SpwingLabelButtonDemoModel}. The parameter
+   * is optional, but is needed in this case. The parameter list
+   * is very flexible for event methods; see the Spwing
+   * documentation for more details.<br>
+   * Since the compiler doesn't see that the method is
+   * called (it is called via reflection), we suppress the
+   * unused warnings.<br>     *
+   * @param model The active model.
+   */
+  @SuppressWarnings("unused")
+  public void onButton_Clicked( SpwingLabelButtonDemoModel model) {
 
-        // Change the text for the model
-        model.setTextField("Button was clicked");
-    }
+    // Change the text for the model
+    model.setTextField("Button was clicked");
+  }
 }
+
 ```
 
-The controller is automatically connected with events from the view. The 
-```onButton_Clicked```, by virtue of name, is called whenever the view object
-```button``` is clicked. The signature of this method is flexible and the framework
-adapts to the signature provided; see the discussion of Invokers below. The important
-point, though, is that no wiring is required; the naming convention is enough
-to wire the view objects to the controller.
 
-### The view declaration
-Spwing uses a declarative view description language (SVWF) to describe views, 
-instead of Java code. This provides a more concise way of describing the views
-and explicitly separates the View from the Controller.
+### Other project files
 
+Spwing supports application property files, with the same name as the 
+application class (so in this case SpringLabelButtonDemo.properties). 
+The framework supports both Locale and platform-specific resources; you can 
+have a different set of resources for Windows, Linux and Mac if that's desired.
+(The same applies to the SVWF files - those too can be platform specific).
+
+For this demo app, the property file is simple: it just defines the name
+of the application for the About box:
+
+```java
+applicationName=Spwing Button Label Demo
 ```
-/* Define the components of our view
- *
- * - A Frame that contains the elements
- * - A label displaying text from the model
- * - A button to change the text in the model
- */
-components {
-    frame: JFrame(title="Spwing Demo", preferredSize=(400, 200));
-    label: JLabel(horizontalAlignment=$CENTER); // Note the use of SwingConstants.CENTER
-    button: JButton(text="Click me");
-}
 
-// Bind the label to the text field. This is on the model by
-// default but we can specify other beans instead.
-// Since we want the text to automatically update when the
-// text changes, we set a trigger event that the model
-// signals when the text changes ("evtTextFieldChanged");
-bind {
-    label.text => "textField" ["evtTextFieldChanged"];
-}
-
-// Layout the frame, with the label in the center and the button at the bottom
-layout {
-    frame: borderLayout(center=label, south=button);
-}
-```
-The minimal SVWF files describe the components, bindings, and layouts of the views.
-You can also describe default values, colors, or even invoke methods of the 
-controller for more advanced needs. See the description below.
-
-One last thing: a pom.xml to set up the build.
+This is a maven project, so it has a pom.xml file:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -394,7 +504,7 @@ One last thing: a pom.xml to set up the build.
         <dependency>
             <groupId>com.hablutzel.spwing</groupId>
             <artifactId>spwing</artifactId>
-            <version>0.5</version>
+            <version>0.6.0</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -407,8 +517,8 @@ One last thing: a pom.xml to set up the build.
 </project>
 ```
 
-That's it. Run the application and see the window. Try the automatic
-Open and Save commands. Click the button and see the bindings in action.
+That's it. Run the application and see the window. Click the button and see the bindings in action.
+Try some of the default actions, such as About, New, and Close.
 
 ## Invokers
 Spwing allows the programmer to declare methods to invoke for various activities. For

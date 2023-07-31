@@ -30,7 +30,11 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 
 import javax.swing.*;
 import java.io.InputStream;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * MenuLoader translates a JSON representation of a menu into a
@@ -123,7 +127,7 @@ public class MenuLoader {
         // default to the class name
         String menuSourceClassName = documentComponentClass.getSimpleName();
         MenuSource menuSource = AnnotatedElementUtils.getMergedAnnotation(documentComponentClass, MenuSource.class);
-        if (Objects.nonNull(menuSource)) {
+        if (null != menuSource) {
             String menuName = menuSource.menuName().isBlank()
                     ? menuSourceClassName
                     : menuSource.menuName();
@@ -141,7 +145,7 @@ public class MenuLoader {
      *
      * @param spwing The {@link Spwing} to use
      */
-    public void rebuildMenuBar(Spwing spwing) {
+    public void rebuildMenuBar(final Spwing spwing) {
 
         // Load the JSON representation of the menu. If this cannot
         // be loaded, then the menu cannot be rebuilt and will
@@ -189,7 +193,7 @@ public class MenuLoader {
      * @param node The node
      * @return The ID
      */
-    private String getId(JsonNode node) {
+    private String getId(final JsonNode node) {
         if (node.has("id")) {
             return node.get("id").asText();
         } else {
@@ -208,7 +212,8 @@ public class MenuLoader {
      * @param menuName The menu to find
      * @return The menu, if it exists
      */
-    private JMenu getMenu(JMenuBar menuBar, String menuName) {
+    private JMenu getMenu(final JMenuBar menuBar,
+                          final String menuName) {
         for (int i = 0; i < menuBar.getMenuCount(); ++i) {
             final JMenu menu = menuBar.getMenu(i);
             if (menu.getText().equals(menuName)) {
@@ -226,7 +231,9 @@ public class MenuLoader {
      * @param menuBar The menu bar we're populating
      * @param node The menu node
      */
-    private void addMenuBarNode(Spwing spwing, JMenuBar menuBar, JsonNode node) {
+    private void addMenuBarNode(final Spwing spwing,
+                                final JMenuBar menuBar,
+                                final JsonNode node) {
 
         // Get the id, make sure it's a valid menu name
         String menuID = getId(node);
@@ -235,7 +242,7 @@ public class MenuLoader {
         } else {
             String menuName = spwing.getApplicationContext().getMessage(menuID, null, menuID, Locale.getDefault());
             JMenu existingMenuBarMenu = getMenu(menuBar, menuName);
-            JMenu menu = Objects.nonNull(existingMenuBarMenu) ? existingMenuBarMenu : addNewMenu(menuBar, menuName);
+            JMenu menu = null != existingMenuBarMenu ? existingMenuBarMenu : addNewMenu(menuBar, menuName);
 
             // Populate the menu
             buildMenu(spwing, menuID, menu, node);
@@ -249,9 +256,9 @@ public class MenuLoader {
      * @param menuName The menu name
      * @return The created menu
      */
-    private JMenu addNewMenu(JMenuBar menuBar, String menuName) {
-        JMenu menu;
-        menu = new JMenu(menuName);
+    private JMenu addNewMenu(final JMenuBar menuBar,
+                             final String menuName) {
+        JMenu menu = new JMenu(menuName);
         menuBar.add(menu);
         return menu;
     }
@@ -261,10 +268,14 @@ public class MenuLoader {
      * Add the items to a menu.
      *
      * @param spwing The {@link Spwing} instance
-     * @param menu
-     * @param node
+     * @param menuID The menu ID
+     * @param menu THe menu instance
+     * @param node The JSON node describing the menu instance
      */
-    private void buildMenu(Spwing spwing, String menuID, JMenu menu, JsonNode node) {
+    private void buildMenu(final Spwing spwing,
+                           final String menuID,
+                           final JMenu menu,
+                           final JsonNode node) {
 
         Map<String,JMenuItem> mappedMenuItems = new HashMap<>();
 
@@ -278,7 +289,7 @@ public class MenuLoader {
         } else {
             node.get("items").forEach(itemNode -> {
                 String itemID = getId(itemNode);
-                if (Objects.isNull(itemID) || itemID.isBlank() || itemID.equals("-")) {
+                if (null == itemID || itemID.isBlank() || itemID.equals("-")) {
                     menu.addSeparator();
                 } else {
                     if (itemID.startsWith("m_")) {
@@ -287,7 +298,7 @@ public class MenuLoader {
                         menu.add(subMenu);
                         buildMenu(spwing, itemID, subMenu, itemNode);
                     } else {
-                        final JMenuItem menuItem = buildItem(spwing, itemNode);
+                        final JMenuItem menuItem = mappedMenuItems.getOrDefault(itemID, buildItem(spwing, itemNode));
                         menu.add(menuItem);
                         mappedMenuItems.put(itemID,menuItem);
                     }
@@ -307,11 +318,12 @@ public class MenuLoader {
     /**
      * Build an item within a menu.
      *
-     * @param spwing
-     * @param node
-     * @return
+     * @param spwing The {@link Spwing} instance
+     * @param node The JSON node describing the item
+     * @return The new {@link JMenuItem}
      */
-    private JMenuItem buildItem(Spwing spwing, JsonNode node) {
+    private JMenuItem buildItem(final Spwing spwing,
+                                final JsonNode node) {
         JMenuItem menuItem = new JMenuItem();
         String id = getId(node);
         String itemName = spwing.getApplicationContext().getMessage(id, null, id, Locale.getDefault());

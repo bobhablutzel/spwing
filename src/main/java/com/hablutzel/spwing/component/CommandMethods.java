@@ -52,6 +52,12 @@ public class CommandMethods {
 
 
     /**
+     * The menu item resolver used to allow the enable function to change the menu item
+     */
+    private Function<ParameterDescription, ParameterResolution> menuItemResolver = null;
+
+
+    /**
      * Commands are enabled if (a) they have an enabler, and the
      * enabler returns true, or (b) they do not have an enabler but
      * do have a handler.
@@ -59,11 +65,24 @@ public class CommandMethods {
      */
     public boolean isEnabled(final JMenuItem menuItem) {
         if (null != enabler) {
-            enabler.registerParameterResolver(ParameterResolution.forClass(JMenuItem.class, menuItem));
+            enabler.registerParameterResolver(getParameterSupplier(menuItem));
             return enabler.invoke(Boolean.class);
         } else {
             return null != handler;
         }
+    }
+
+    /**
+     * Get the parameter supplier for the menu item
+     *
+     * @param menuItem The menu item
+     * @return The parameter resolver function
+     */
+    private Function<ParameterDescription, ParameterResolution> getParameterSupplier(final JMenuItem menuItem) {
+        if (null == menuItemResolver) {
+            menuItemResolver = ParameterResolution.forClass(JMenuItem.class, menuItem);
+        }
+        return menuItemResolver;
     }
 
 
@@ -73,9 +92,10 @@ public class CommandMethods {
      * @param defaultValue The default value to return
      * @param injectedValues Values that can be injected into the invocation context
      */
-    public <T> T fireCommandWithResult(final Class<T> clazz,
-                                       final T defaultValue,
-                                       final Function<ParameterDescription, ParameterResolution>... injectedValues) {
+    @SafeVarargs
+    public final <T> T fireCommandWithResult(final Class<T> clazz,
+                                             final T defaultValue,
+                                             final Function<ParameterDescription, ParameterResolution>... injectedValues) {
 
         // Allow the injected values to be used as a parameter to handler methods (might be none)
         Arrays.stream(injectedValues).forEach(handler::registerParameterResolver);

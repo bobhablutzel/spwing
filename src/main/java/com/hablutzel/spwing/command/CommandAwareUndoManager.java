@@ -77,36 +77,71 @@ public class CommandAwareUndoManager extends UndoManager {
     }
 
 
+    /**
+     * Get the presentation name from the command that is to be undone
+     * @return The presentation name for the command to be undone
+     */
     @Override
     public synchronized String getUndoPresentationName() {
         return editToBeUndone().getPresentationName();
     }
 
+
+    /**
+     * Get the presentation name from the command that is to be redone
+     * @return The presentation name from the command to be redone
+     */
     @Override
     public synchronized String getRedoPresentationName() {
         return editToBeRedone().getPresentationName();
     }
 
+    /**
+     * Undo the last done command. This will enforce the
+     * guard that ignores Swing generated edits during the
+     * undo of the command, and will manage the last
+     * change time for determining of the document has changed
+     * since the last checkpoint.
+     * @throws CannotUndoException If the command cannot be undone
+     */
     @Override
     public void undo() throws CannotUndoException {
         UndoableEdit undoneEdit = editToBeUndone();
-        withLastGuard(super::undo);
+        withChangeGuard(undoneEdit, super::undo);
         lastChangeTimestamp = lastChangeBeforeEditWasExecuted.get(undoneEdit);
     }
 
 
-
+    /**
+     * Redo the last undone command. This will enforce the
+     * guard that ignores Swing generated edits during the
+     * redo of the command, and will manage the last
+     * change time for determining of the document has changed
+     * since the last checkpoint.
+     * @throws CannotRedoException If the command cannot be redone
+     */
     @Override
     public void redo() throws CannotRedoException {
         UndoableEdit redoneEdit = editToBeRedone();
-        withLastGuard(super::redo);
+        withChangeGuard(redoneEdit, super::redo);
         lastChangeBeforeEditWasExecuted.put(redoneEdit, lastChangeTimestamp);
         lastChangeTimestamp = Instant.now();
+
     }
 
 
-    private void withLastGuard(Runnable action) {
-        if (lastEdit() instanceof ChangeCommand) {
+    /**
+     * Imposes a change guard if the undoableEdit is an instance of
+     * {@link ChangeCommand}. All application level changes should
+     * be derived from {@link ChangeCommand}, so that the Swing
+     * generated undoable events will be ignored during the execution
+     * or undoing of those commands.
+     * @param undoableEdit The undoable edit
+     * @param action The action to take
+     */
+    private void withChangeGuard(final UndoableEdit undoableEdit,
+                                 final Runnable action) {
+        if (undoableEdit instanceof ChangeCommand) {
             withGuard(action);
         } else {
             action.run();
@@ -114,7 +149,15 @@ public class CommandAwareUndoManager extends UndoManager {
     }
 
 
-    private void withGuard(Runnable action) {
+    /**
+     * Executes an action with the change guard enabled. The
+     * change guard discards any Swing component generated
+     * undoable edits during the scope of a {@link ChangeCommand}
+     * so that the change command, not the Swing generated
+     * edits, are the ones that are presented to the user.
+     * @param action The action to take (a {@link Runnable})
+     */
+    private void withGuard(final Runnable action) {
         try {
             inChangeCommand = true;
             action.run();
@@ -124,6 +167,13 @@ public class CommandAwareUndoManager extends UndoManager {
     }
 
 
+    /**
+     * Discard all the edits in the undo manager. This allows
+     * an undo stack to be reset, notably after the views are
+     * setup for the first time upon opening a document. In
+     * addition to discarding the edits, this routine resets
+     * the last checkpoint time.
+     */
     @Override
     public synchronized void discardAllEdits() {
         checkpoint();
@@ -139,6 +189,14 @@ public class CommandAwareUndoManager extends UndoManager {
     }
 
 
+    /**
+     * Resets the checkpoint time to the current time. The
+     * checkpoint time is the last time the document was opened
+     * or saved and is used for determining of the document is
+     * dirty. So long as all changes to the document are performed
+     * through undoable edits, the checkpoint mechanism will enable
+     * the framework to determine if the document is dirty
+     */
     public void checkpoint() {
         lastCheckpoint = Instant.now();
 
@@ -152,6 +210,12 @@ public class CommandAwareUndoManager extends UndoManager {
     }
 
 
+    /**
+     * When edits are trimmed, we need to discard the change timestamp
+     * we are tracking for them. This routine does that.
+     * @param from the minimum index to remove
+     * @param to the maximum index to remove
+     */
     @Override
     protected void trimEdits(int from, int to) {
         super.trimEdits(from, to);
