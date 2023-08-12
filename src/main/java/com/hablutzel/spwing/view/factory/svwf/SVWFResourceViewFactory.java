@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
-import java.awt.*;
+import java.awt.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -69,8 +69,8 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
      *
      */
     public Component build(final DocumentSession documentSession,
-                           final @Model Object model,
-                           final Spwing spwing) {
+                           final Spwing spwing,
+                           final @Model Object model ) {
 
         final List<Supplier<InputStream>> nameMappers = new ArrayList<>();
 
@@ -91,7 +91,7 @@ public class SVWFResourceViewFactory extends SVWFViewFactory {
                 .findFirst()
                 .orElse(null)) {
 
-            return fromStream(model, spwing, swvfStream);
+            return fromStream(spwing, model, swvfStream);
         } catch (IOException e) {
             log.error("Error reading SVWF file", e);
             throw new RuntimeException("Error reading SVWF file", e);

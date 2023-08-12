@@ -28,13 +28,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 
-import javax.swing.*;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.KeyStroke;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * MenuLoader translates a JSON representation of a menu into a
@@ -298,9 +297,8 @@ public class MenuLoader {
                         menu.add(subMenu);
                         buildMenu(spwing, itemID, subMenu, itemNode);
                     } else {
-                        final JMenuItem menuItem = mappedMenuItems.getOrDefault(itemID, buildItem(spwing, itemNode));
+                        final JMenuItem menuItem = mappedMenuItems.computeIfAbsent(itemID, id -> buildItem(spwing, itemNode));
                         menu.add(menuItem);
-                        mappedMenuItems.put(itemID,menuItem);
                     }
                 }
             });

@@ -33,15 +33,11 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
-import javax.swing.*;
+import javax.swing.SwingUtilities;
 import java.awt.event.MouseEvent;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 

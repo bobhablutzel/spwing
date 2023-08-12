@@ -39,18 +39,17 @@ import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 import javax.swing.*;
-import java.awt.*;
+import java.awt.Component;
+import java.awt.Font;
+import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.beans.PropertyDescriptor;
 import java.beans.PropertyEditor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -167,20 +166,31 @@ public class ViewPropertyBinder {
                     .map(trigger -> new DocumentEventRefreshTrigger(applicationContext, documentEventDispatcher, trigger))
                     .map(RefreshTrigger.class::cast)
                     .toList();
-        } else if (targetObject instanceof PropertyEditor propertyEditor) {
+        } else {
 
-            // No defined triggers, so we're going to see if we can use property listeners
-            // This branch works for models that are derived from PropertyEditor instances.
-            PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
-            propertyEditor.addPropertyChangeListener(refreshTrigger);
-            return List.of(refreshTrigger);
+            Consumer<PropertyChangeListener> addListenerFunc = getAddChangeListener(targetObject);
+            if (null != addListenerFunc) {
+                PropertyListenerRefreshTrigger refreshTrigger = buildRefreshTrigger(targetObject, propertyName);
+                addListenerFunc.accept(refreshTrigger);
+                return List.of(refreshTrigger);
+            } else {
+                return List.of();
+            }
+        }
+    }
+
+
+    /**
+     * Get the function that adds a property change listener to an object.
+     *
+     * @param targetObject The target object
+     * @return A (potentially null) {@link Consumer<PropertyChangeListener>}
+     */
+    private Consumer<PropertyChangeListener> getAddChangeListener(final Object targetObject ) {
+        if (targetObject instanceof PropertyEditor propertyEditor) {
+            return propertyEditor::addPropertyChangeListener;
         } else if (targetObject instanceof PropertyChangeModel propertyChangeModel) {
-
-            // No defined triggers, so we're going to see if we can use property listeners
-            // This branch works for models that are derived from PropertyEditor instances.
-            PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
-            propertyChangeModel.addPropertyChangeListener(refreshTrigger);
-            return List.of(refreshTrigger);
+            return propertyChangeModel::addPropertyChangeListener;
         } else {
             // Reflective approach
             Optional<Method> optionalAddListenerMethod = Arrays.stream(targetObject.getClass().getMethods())
@@ -191,17 +201,71 @@ public class ViewPropertyBinder {
                             method.getParameters()[0].getType().equals(PropertyChangeListener.class))
                     .findFirst();
             if (optionalAddListenerMethod.isPresent()) {
-                PropertyListenerRefreshTrigger refreshTrigger = new PropertyListenerRefreshTrigger(propertyName);
                 final Method addListenerMethod = optionalAddListenerMethod.get();
-                try {
-                    addListenerMethod.invoke(targetObject, refreshTrigger );
-                    return List.of(refreshTrigger);
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    log.warn("Method {} of {} could not be invoked, no refresh trigger generated. ", addListenerMethod.getName(), targetObject.getClass().getName());
-                }
+                return propertyChangeListener -> {
+                    try {
+                        addListenerMethod.invoke(targetObject, propertyChangeListener);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        log.warn("Method {} of {} could not be invoked, no refresh trigger. ",
+                                addListenerMethod.getName(), targetObject.getClass().getName());
+                    }
+                };
             }
-            return List.of();
         }
+        return null;
+    }
+
+
+    /**
+     * Build a {@link PropertyListenerRefreshTrigger} for the object and property.
+     * This will also add an additional property listener, if needed, to the
+     * leaf node property so that the leaf node signalling a change will be
+     * propogated to the target object.
+     *
+     * @param targetObject The target object
+     * @param propertyName The property name (or expression)
+     * @return A {@link PropertyListenerRefreshTrigger} instance
+     */
+    private PropertyListenerRefreshTrigger buildRefreshTrigger( final Object targetObject,
+                                                  final String propertyName ) {
+
+        final BeanWrapper beanWrapper = beanWrapperFor(targetObject);
+        final PropertyDescriptor propertyDescriptor = beanWrapper.getPropertyDescriptor(propertyName);
+
+        // There are two potential cases here. First, the property could be a simple
+        // property on the target object. In this case, we can just build a property
+        // listener and use that. However, in some cases the property name passed in
+        // is actually a property expression, and therefore the leaf property name
+        // and the expression will differ. In this case, we need to add a bridge listener
+        final String leafName = propertyDescriptor.getName();
+        final PropertyListenerRefreshTrigger result = new PropertyListenerRefreshTrigger(propertyName);
+        if (!propertyName.equals(leafName)) {
+
+            // This is the case where the property name is a property path, so we can
+            // listen to changes on the parent. We chop off the end of the property
+            // path in order to get the property path that references the parent
+            final String parentPath = propertyName.substring(0, propertyName.length() - leafName.length() - 1 );
+
+            final Object parentObject = beanWrapper.getPropertyValue(parentPath);
+            if (null != parentObject) {
+                Consumer<PropertyChangeListener> addParentListener = getAddChangeListener(parentObject);
+                if (null != addParentListener) {
+                    addParentListener.accept(evt -> {
+                        if (evt.getPropertyName().equals(leafName)) {
+                            result.propertyChange(new PropertyChangeEvent(parentObject, propertyName, evt.getOldValue(), evt.getNewValue()));
+                        }
+                    });
+                } else {
+                    log.error("Parent property defined by {} does not emit property events", parentPath);
+                }
+            } else {
+                log.error( "Could not resolve parent property {}", parentPath );
+            }
+        }
+
+        return result;
+
+
     }
 
 

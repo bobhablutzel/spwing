@@ -7,11 +7,11 @@ Some thoughts on what still needs to be done in Spwing, in no particular order.
   maintain collections of sub-models associated to (e.g.) tables. This is
   probably the thorniest problem still to solve, but will give a very
   clean programming model.
-- Undo/redo support
+- ~~Undo/redo support~~
 - Preference dialogs, with associated storage of preferences. Preferences
 should be automatically stored with documents (e.g. window position and size)
 as well as settings that the user can manipulate directly
-- Revisit the document "dirty" mechanism; make it less invasive
+- ~~Revisit the document "dirty" mechanism; make it less invasive~~
 - Splash screen
 - Example program for creating stand-alone deployable applications
 - General performance tuning - an on-going process
@@ -68,22 +68,22 @@ be directly supported as they are internal to other components or abstract)
   - javax.swing.JToolBar.Separator
   - javax.swing.DefaultListCellRenderer.UIResource
 - Support specifically for popup menus tied to lists, enums, etc.
-- Property event bind operator ==> which derives the trigger event by convention rather than specification
-  (this probably depends on the hierarchical model support)
+- ~~Property event bind operator ==> which derives the trigger event by convention rather than specification
+  (this probably depends on the hierarchical model support)~~
 - Ensure all classes are properly documented.
 - Support for more layout managers
-  - BorderLayout (done)
-  - BoxLayout (done)
+  - ~~BorderLayout~~ (done)
+  - ~~BoxLayout~~ (done)
   - CardLayout (tbd)
-  - FlowLayout (done)
-  - GridBagLayout (done)
+  - ~~FlowLayout~~ (done)
+  - ~~GridBagLayout~~ (done)
   - GridLayout (tbd)
   - GroupLayout (tbd)
   - SpringLayout (tbd)
 
 
 # Goals
-- 0.6 release   Support all layout managers and components
+- 0.6.5 release   Support all layout managers and components
 - 0.7 release   Support nested / hierarchical models
 - 0.8 release   Revisit menu management / dynamic menu support
 - 0.9 release   Additional features TBD plus a lot of debugging & performance tuning

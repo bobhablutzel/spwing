@@ -17,29 +17,28 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
-import com.hablutzel.spwing.util.Colors;
 import org.springframework.stereotype.Service;
 
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
-import java.awt.*;
+import java.awt.Color;
 
 
 @Service
 public class SVWFBorderFactory implements SVWFComponentFactory {
 
     @Override
-    public void addComponents(SVWFParseContext parseContext) {
-        parseContext.addComponent("onePixelBlackLineBorder", new LineBorder(Color.black, 1));
-        parseContext.addComponent("twoPixelBlackLineBorder", new LineBorder(Color.black, 2));
-        parseContext.addComponent("threePixelBlackLineBorder", new LineBorder(Color.black, 3));
-        parseContext.addComponent("fourPixelBlackLineBorder", new LineBorder(Color.black, 4));
-        parseContext.addComponent("onePixelWhiteLineBorder", new LineBorder(Color.white, 1));
-        parseContext.addComponent("twoPixelWhiteLineBorder", new LineBorder(Color.white, 2));
-        parseContext.addComponent("threePixelWhiteLineBorder", new LineBorder(Color.white, 3));
-        parseContext.addComponent("fourPixelWhiteLineBorder", new LineBorder(Color.white, 4));
-        parseContext.addComponent("onePixelEmptyBorder", new EmptyBorder(1, 1, 1, 1));
-        parseContext.addComponent("fivePixelEmptyBorder", new EmptyBorder(5, 5, 5, 5));
-        parseContext.addComponent("tenPixelEmptyBorder", new EmptyBorder(10, 10, 10, 10));
+    public void addComponents(final SVWFListener svwfListener) {
+        svwfListener.addComponent("onePixelBlackLineBorder", new LineBorder(Color.black, 1));
+        svwfListener.addComponent("twoPixelBlackLineBorder", new LineBorder(Color.black, 2));
+        svwfListener.addComponent("threePixelBlackLineBorder", new LineBorder(Color.black, 3));
+        svwfListener.addComponent("fourPixelBlackLineBorder", new LineBorder(Color.black, 4));
+        svwfListener.addComponent("onePixelWhiteLineBorder", new LineBorder(Color.white, 1));
+        svwfListener.addComponent("twoPixelWhiteLineBorder", new LineBorder(Color.white, 2));
+        svwfListener.addComponent("threePixelWhiteLineBorder", new LineBorder(Color.white, 3));
+        svwfListener.addComponent("fourPixelWhiteLineBorder", new LineBorder(Color.white, 4));
+        svwfListener.addComponent("onePixelEmptyBorder", new EmptyBorder(1, 1, 1, 1));
+        svwfListener.addComponent("fivePixelEmptyBorder", new EmptyBorder(5, 5, 5, 5));
+        svwfListener.addComponent("tenPixelEmptyBorder", new EmptyBorder(10, 10, 10, 10));
     }
 }

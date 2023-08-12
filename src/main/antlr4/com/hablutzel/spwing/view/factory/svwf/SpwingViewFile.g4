@@ -91,7 +91,7 @@ defaultClause
     ;
 
 defaultStatement
-    :   classAlias=Identifier OPAREN (kvPair (COMMA kvPair)*)? CPAREN
+    :   classAlias=Identifier OPAREN (fixedOnlyKVPair (COMMA fixedOnlyKVPair)*)? CPAREN
     ;
 
 componentClause
@@ -119,7 +119,19 @@ componentStatement
     ;
 
 kvPair
-    :   k=Identifier EQUAL v=pairValue
+    :   k=Identifier (fixedValue | boundValue)
+    ;
+
+fixedOnlyKVPair
+    :   k=Identifier fixedValue
+    ;
+
+fixedValue
+    :   EQUAL v=pairValue
+    ;
+
+boundValue
+    :   BIND_OP e=String_Literal
     ;
 
 pairValue

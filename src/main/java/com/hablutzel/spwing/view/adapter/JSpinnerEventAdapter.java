@@ -20,7 +20,8 @@ import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.invoke.ParameterDescription;
 import com.hablutzel.spwing.invoke.ParameterResolution;
 
-import javax.swing.*;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerModel;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
@@ -31,35 +32,35 @@ import java.util.function.Function;
  * a pass through to the {@link AbstractButtonEventAdapter}
  * @author Bob Hablutzel
  */
-public final class JCheckboxEventAdapter extends AbstractButtonEventAdapter {
+public final class JSpinnerEventAdapter extends JComponentEventAdapter {
 
     /**
      * The JCheckBox
      */
-    private final JCheckBox checkBox;
+    private final JSpinner spinner;
 
     /**
      * Constructor.
-     * @param checkBox The checkbox
+     * @param spinner The spinner
      * @param spwing The Spwing framework instance
      */
-    public JCheckboxEventAdapter(final JCheckBox checkBox,
-                                 final Spwing spwing) {
-        super(checkBox, spwing);
-        this.checkBox = checkBox;
+    public JSpinnerEventAdapter(final JSpinner spinner,
+                                final Spwing spwing) {
+        super(spinner, spwing);
+        this.spinner = spinner;
     }
 
 
     /**
-     * Inject the checkBox into the parameters
+     * Inject the spinner into the parameters
      *
      * @return A map with the check box supplier
      */
     @Override
     protected Set<Function<ParameterDescription, ParameterResolution>> getInjectedParameters() {
         Set<Function<ParameterDescription, ParameterResolution>> result = new HashSet<>(super.getInjectedParameters());
-        result.add(ParameterResolution.forClass(JCheckBox.class, checkBox));
-        result.add(ParameterResolution.forClass(Boolean.class, checkBox.isSelected()));
+        result.add(ParameterResolution.forClass(JSpinner.class, spinner));
+        result.add(ParameterResolution.forClass(SpinnerModel.class, spinner.getModel()));
         return result;
     }
 

@@ -24,26 +24,23 @@ import com.hablutzel.spwing.constants.ContextualConstant;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
+import com.hablutzel.spwing.util.ANTLRUtils;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
 import com.hablutzel.spwing.view.bind.Accessor;
+import com.hablutzel.spwing.view.bind.PropertyAccessor;
+import com.hablutzel.spwing.view.bind.ViewPropertyBinder;
 import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
+import com.hablutzel.spwing.view.factory.component.ViewComponentFactory;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.antlr.v4.runtime.CharStream;
-import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.misc.Interval;
-import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
-import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -51,6 +48,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,10 +71,31 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     public static final Pattern GRID_COORDINATE_PATTERN = Pattern.compile("([a-zA-Z]+)(\\d+)");
     private final Object modelObject;
     private final Spwing spwing;
+    
+    @Getter
     private final ApplicationContext applicationContext;
     private final ConversionService conversionService;
     private final DocumentEventDispatcher documentEventDispatcher;
-    private final SVWFParseContext parseContext;
+    private final ViewPropertyBinder viewPropertyBinder;
+
+    /**
+     * Map of the component factories we use. {@link ViewComponentFactory} instances
+     * all for the creation of new Swing components based on a short name (an alias)
+     * which is defined by the factory. This map gets loaded when building the view
+     */
+    private final Map<String, ViewComponentFactory<?>> viewComponentFactoryMap = new HashMap<>();
+
+    /**
+     * Map of the components that this listener knows about
+     */
+    private final Map<String, Object> knownComponents = new HashMap<>();
+
+    /**
+     * Defined default values
+     */
+    private final Map<String, Map<String, Object>> defaultValues = new HashMap<>();
+
+
 
     private SpwingViewFileParser.SvwfFileContext svwfFileContext = null;
 
@@ -86,84 +105,42 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     // TODO change layout processing
     private Container layoutContainer = null;
 
+
     /**
-     * Routine to get text from a {@link ParserRuleContext} instance.
+     * Build a new listener for the given model and {@link Spwing} instance
      *
-     * @param ctx The ParserRuleContext instance
-     * @return The text for that context. Note this might include
-     * whitespace including linefeeds, so be ready for that
+     * @param spwing      The Spwing instance
+     * @param modelObject The model object
+     * @return The new listener
      */
-    public static String textFromContext(ParserRuleContext ctx) {
+    public static SVWFListener build(final Spwing spwing, final Object modelObject ) {
 
-        // You would think that we could just call ctx.getText().
-        // However, that doesn't work because any tokens that are
-        // diverted to the hidden channel (e.g. whitespace) will
-        // be excluded; therefore the text would not look as it did
-        // to the author.
-        //
-        // To address this, we get the start and stop tokens, and
-        // get the text between those two (inclusive)
-        Token start = ctx.getStart();
-        Token stop = ctx.getStop();
+        // Get the conversion service and document event dispatcher
+        final ApplicationContext applicationContext = spwing.getApplicationContext();
+        final DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
+        final ConversionService conversionService = applicationContext.getBean(ConversionService.class);
 
-        if (start == null || stop == null) {
-            return "";
-        }
-
-        // Get the underlying character stream
-        CharStream stream = start.getInputStream();
-
-        // Create an interval that start at the beginning of the
-        // start token and continues through the end of the stop token
-        Interval interval = new Interval(start.getStartIndex(), stop.getStopIndex());
-
-        // Get the text and return it. (Note it might contain whitespace like
-        // linefeeds, so be careful of that!)
-        return stream.getText(interval);
-    }
-
-    /**
-     * Routine to get the contexts of a string literal, which
-     * strips the quotes and unescapes the characters
-     */
-    public static String stripStringLiteral(String text) {
-        // Remove quotes and unescape the text (using Java rules)
-        text = text.substring(1, text.length() - 1);
-        return StringEscapeUtils.unescapeJava(text);
-    }
-
-    /**
-     * Routine to get the contexts of a string literal, which
-     * strips the quotes and unescapes the characters
-     */
-    @SuppressWarnings("unused")
-    public static String stripStringLiteral(Token token) {
-        return stripStringLiteral(token.getText());
-    }
-
-    /**
-     * Return a long value from a Integer_Literal token
-     * This will deal with both decimal and hex values
-     */
-    @SuppressWarnings("unused")
-    public static long getLongValue(TerminalNode node, long defaultValue) {
-        int radix = 10;
-        int offset = 0;
-        if (node != null) {
-            String text = node.getText();
-            if (text.startsWith("0x")) {
-                radix = 16;
-                offset = 2;
-            }
-            return Long.parseLong(text, offset, text.length(), radix);
-        } else {
-            return defaultValue;
-        }
+        // Create a component map for this parse, and include all the predefined components.
+        return new SVWFListener(modelObject, spwing, applicationContext, conversionService, documentEventDispatcher, new ViewPropertyBinder(applicationContext) );
     }
 
     @Override
     public void enterSvwfFile(SpwingViewFileParser.SvwfFileContext ctx) {
         this.svwfFileContext = ctx;
+
+        // Entering the file. We need to load the components that we know about
+        // from the beans that are of type ViewComponentFactory. Note that
+        // we explicitly don't specify the generic class parameter, because we
+        // want to get all the ViewComponentFactory instances.
+        applicationContext.getBeansOfType(ViewComponentFactory.class)
+                .values()
+                .forEach(factoryBean -> viewComponentFactoryMap.put(factoryBean.alias(), factoryBean));
+
+        log.info( "known view factories: {} ", viewComponentFactoryMap );
+
+        // Define known components - known colors, fonts, etc.
+        Collection<SVWFComponentFactory> factoryBeans = applicationContext.getBeansOfType(SVWFComponentFactory.class).values();
+        factoryBeans.forEach(svwfComponentFactory -> svwfComponentFactory.addComponents(this));
     }
 
     @Override
@@ -176,8 +153,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         if (null != targetObject) {
             ReflectiveInvoker.invoke(applicationContext, targetObject, methodName,
                     ParameterResolution.forClass(SVWFListener.class, this),
-                    ParameterResolution.forClass(SpwingViewFileParser.SvwfFileContext.class, svwfFileContext),
-                    ParameterResolution.forClass(SVWFParseContext.class, parseContext));
+                    ParameterResolution.forClass(SpwingViewFileParser.SvwfFileContext.class, svwfFileContext));
         }
     }
 
@@ -187,8 +163,8 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * the model object (which is the default of the root clause is
      * omitted), the controller object, or an arbitrary bean given by
      * name
-     * @param rootClauseContext
-     * @return
+     * @param rootClauseContext The root clause context
+     * @return The object that is the root of the expression
      */
     private Object getRootClauseObject(SpwingViewFileParser.RootClauseContext rootClauseContext) {
         if (null != rootClauseContext) {
@@ -243,14 +219,14 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         String property = ctx.property.getText();
 
         // See if we know this identifier and make sure it's a Swing component
-        Object viewObject = parseContext.getKnownComponents().get(identifier);
+        Object viewObject = knownComponents.get(identifier);
         if (viewObject instanceof Component component) {
 
             // Attempt to bind the property. We bind even if the parse is already
             // invalid, but update based on the new parse.
-            cleanParse = parseContext.getViewPropertyBinder().bind( component, property, accessor, triggers) && cleanParse;
+            cleanParse = viewPropertyBinder.bind( component, property, accessor, triggers) && cleanParse;
         } else {
-            log.error("Component {} not found for, or is not a component", identifier);
+            log.error("Component {} not found, or ineligible for binding", identifier);
             cleanParse = false;
         }
     }
@@ -270,7 +246,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         } else {
             return ctx.stringElement().stream()
                     .map(stringElementContext -> stringElementContext.element)
-                    .map(SVWFListener::stripStringLiteral)
+                    .map(ANTLRUtils::stripStringLiteral)
                     .toList();
         }
     }
@@ -300,10 +276,8 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
         // Find any that are not within the known component map; if there
         // are any log the problem and kill the parse
-        final Map<String, Object> knownComponents = parseContext.getKnownComponents();
         List<String> invalidIdentifiers = identifiedElements.stream()
-                .filter(name -> !knownComponents.containsKey(name) ||
-                        !(knownComponents.get(name) instanceof Component))
+                .filter(name -> !knownComponents.containsKey(name) || !(knownComponents.get(name) instanceof Component))
                 .toList();
         if (invalidIdentifiers.isEmpty()) {
 
@@ -326,7 +300,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             }
 
             // Bind that group
-            parseContext.getViewPropertyBinder().bindGroup( targetElements, targetProperty, accessor, triggers );
+           viewPropertyBinder.bindGroup( targetElements, targetProperty, accessor, triggers );
 
         } else {
             log.error("Elements {} were not found for the group.", invalidIdentifiers);
@@ -347,11 +321,11 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // Deal with the common parts of the bind statement: the root object (if specified),
         // the expression, and the potential triggers
         Object rootObject = getRootClauseObject(ctx.rootClause());
-        String expression = stripStringLiteral(ctx.expression);
-        Accessor accessor = parseContext.getViewPropertyBinder().toAccessor(rootObject, expression);
+        String expression = ANTLRUtils.stripStringLiteral(ctx.expression);
+        Accessor accessor = viewPropertyBinder.toAccessor(rootObject, expression);
 
         List<String> triggers = getTriggers(ctx.triggerClause());
-        List<RefreshTrigger> refreshTriggers = parseContext.getViewPropertyBinder()
+        List<RefreshTrigger> refreshTriggers = viewPropertyBinder
                 .getRefreshTriggers(applicationContext, rootObject, expression, triggers);
 
         // Get the property accessor for this element
@@ -370,34 +344,21 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     }
 
 
-    /**
-     * Helper routine to check the value of a token against a known
-     * value; returns true if the token is non-null and text matches.
-     *
-     * @param value The value to check against
-     * @param token The token
-     * @return TRUE if the token is non-null and textually matches
-     */
-    private boolean tokenEquals(@NonNull final String value, @Nullable final Token token) {
-        return null != token && value.equals(token.getText());
-    }
-
     @Override
     public void enterDefaultStatement(SpwingViewFileParser.DefaultStatementContext ctx) {
         String classAlias = ctx.classAlias.getText();
-        if (parseContext.getDefinitionMap().containsKey(classAlias)) {
-            SVWFParseContext.ElementDefinition elementDefinition = parseContext.getDefinitionMap().get(classAlias);
-            Class<?> targetClass = elementDefinition.elementClass();
+        if (viewComponentFactoryMap.containsKey(classAlias)) {
 
-            final Map<String, Object> defaultMap = new HashMap<>();
-            parseContext.getDefaultValues().put(targetClass, defaultMap);
+            // Create a new default value map and associate it with the alias
+            // If the map already exists, add to it
+
+            final Map<String, Object> defaultMap = defaultValues.computeIfAbsent(classAlias, s -> new HashMap<>());
+            defaultValues.put(classAlias, defaultMap);
 
             // For each defined default, remember the values
-            ctx.kvPair().forEach(kvPairContext -> {
+            ctx.fixedOnlyKVPair().forEach(kvPairContext -> {
                 final String propertyName = kvPairContext.k.getText();
-                final DeclaredValue declaredValue = new DeclaredValue(kvPairContext.v);
-
-                defaultMap.put(propertyName, declaredValue.get());
+                defaultMap.put(propertyName, getDeclaredValue(kvPairContext.fixedValue().v));
             });
         }
     }
@@ -419,47 +380,47 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     private void defineIntColor(final String colorName,
                                 final SpwingViewFileParser.IntColorSpecContext intColorSpecContext) {
         if (null != intColorSpecContext.alpha) {
-            parseContext.getKnownComponents().put(colorName,
-                    new Color(getIntValue(intColorSpecContext.red),
-                            getIntValue(intColorSpecContext.green),
-                            getIntValue(intColorSpecContext.blue),
-                            getIntValue(intColorSpecContext.alpha)));
+            knownComponents.put(colorName,
+                    new Color(ANTLRUtils.getIntValue(intColorSpecContext.red),
+                            ANTLRUtils.getIntValue(intColorSpecContext.green),
+                            ANTLRUtils.getIntValue(intColorSpecContext.blue),
+                            ANTLRUtils.getIntValue(intColorSpecContext.alpha)));
         } else {
-            parseContext.getKnownComponents().put(colorName,
-                    new Color(getIntValue(intColorSpecContext.red),
-                            getIntValue(intColorSpecContext.green),
-                            getIntValue(intColorSpecContext.blue)));
+            knownComponents.put(colorName,
+                    new Color(ANTLRUtils.getIntValue(intColorSpecContext.red),
+                            ANTLRUtils.getIntValue(intColorSpecContext.green),
+                            ANTLRUtils.getIntValue(intColorSpecContext.blue)));
         }
     }
 
     private void defineFloatColor(final String colorName,
                                   final SpwingViewFileParser.FloatColorSpecContext floatColorSpecContext) {
         if (null != floatColorSpecContext.alphaf) {
-            parseContext.getKnownComponents().put(colorName,
-                    new Color(getFloatValue(floatColorSpecContext.redf),
-                            getFloatValue(floatColorSpecContext.greenf),
-                            getFloatValue(floatColorSpecContext.bluef),
-                            getFloatValue(floatColorSpecContext.alphaf)));
+            knownComponents.put(colorName,
+                    new Color(ANTLRUtils.getFloatValue(floatColorSpecContext.redf),
+                            ANTLRUtils.getFloatValue(floatColorSpecContext.greenf),
+                            ANTLRUtils.getFloatValue(floatColorSpecContext.bluef),
+                            ANTLRUtils.getFloatValue(floatColorSpecContext.alphaf)));
         } else {
-            parseContext.getKnownComponents().put(colorName,
-                    new Color(getFloatValue(floatColorSpecContext.redf),
-                            getFloatValue(floatColorSpecContext.greenf),
-                            getFloatValue(floatColorSpecContext.bluef)));
+            knownComponents.put(colorName,
+                    new Color(ANTLRUtils.getFloatValue(floatColorSpecContext.redf),
+                            ANTLRUtils.getFloatValue(floatColorSpecContext.greenf),
+                            ANTLRUtils.getFloatValue(floatColorSpecContext.bluef)));
         }
     }
 
     private void defineBitfieldColor(final String colorName,
                                      final SpwingViewFileParser.BitFieldColorSpecContext bitFieldColorSpecContext) {
-        int colorValue = getIntValue(bitFieldColorSpecContext.bitField);
-        parseContext.getKnownComponents().put(colorName,
-                new Color(colorValue, getBooleanValue(bitFieldColorSpecContext.hasAlpha)));
+        int colorValue = ANTLRUtils.getIntValue(bitFieldColorSpecContext.bitField);
+        knownComponents.put(colorName,
+                new Color(colorValue, ANTLRUtils.getBooleanValue(bitFieldColorSpecContext.hasAlpha)));
     }
 
     @Override
     public void enterImageStatement(SpwingViewFileParser.ImageStatementContext ctx) {
         String imageName = ctx.name.getText();
         if (null != ctx.imageSpec().resourceName) {
-            String resourceName = stripStringLiteral(ctx.imageSpec().resourceName);
+            String resourceName = ANTLRUtils.stripStringLiteral(ctx.imageSpec().resourceName);
             Object target = getRootClauseObject(ctx.imageSpec().root);
             if (null != target) {
 
@@ -468,7 +429,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
                 try (InputStream in = PlatformResourceUtils.getPlatformResource(target.getClass(), baseName, extension)) {
                     BufferedImage image = ImageIO.read(in);
-                    parseContext.addComponent(imageName, image);
+                    this.addComponent(imageName, image);
                 } catch (Exception e) {
                     log.warn("Unable to read resource file for image {}", resourceName, e);
                 }
@@ -477,10 +438,10 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 cleanParse = false;
             }
         } else {
-            String urlName = stripStringLiteral(ctx.imageSpec().url);
+            String urlName = ANTLRUtils.stripStringLiteral(ctx.imageSpec().url);
             try {
                 URL url = new URL(urlName);
-                parseContext.getKnownComponents().put(imageName, ImageIO.read(url));
+                knownComponents.put(imageName, ImageIO.read(url));
             } catch (Exception e) {
                 log.warn("Unable to read resource file for image {}", urlName, e);
             }
@@ -505,42 +466,39 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
         // If we already have a component with this name, we ignore this
         // definition.
-        if (parseContext.getKnownComponents().containsKey(componentName)) {
+        if (knownComponents.containsKey(componentName)) {
             log.warn("In SWVF file, {} is already defined. Additional definition ignored", componentName);
         } else {
 
             // Get the definition of the element based on the alias. This will give
             // us the function for creating the new alias
-            SVWFParseContext.ElementDefinition elementDefinition = parseContext.getDefinitionMap().get(classAlias);
-            if (null != elementDefinition) {
+            ViewComponentFactory<?> viewComponentFactory = viewComponentFactoryMap.get(classAlias);
+            if (null != viewComponentFactory) {
 
                 // We have the alias, create the instance and get a class for what we just defined.
-                final Function<String, Object> creationFunction = elementDefinition.createFunction();
-                final Object createdElement = creationFunction.apply(componentName);
-                final Class<?> definedObjectType = createdElement.getClass();
+                final Object createdElement = viewComponentFactory.build(componentName);
 
                 // Add this new component to the list
-                parseContext.getKnownComponents().put(componentName, createdElement);
+                knownComponents.put(componentName, createdElement);
 
                 // Set the initial "value" of the component to the name. This can be
                 // changed by specifying a "value" property, which will be intercepted and
                 // interpreted as a new value
-                parseContext.getViewPropertyBinder().setValue(createdElement, componentName);
+                viewPropertyBinder.setValue(createdElement, componentName);
 
                 // In order to set properties of this component, we create a bean
                 // wrapper and set the conversion service
-                BeanWrapper activeComponent = parseContext.getViewPropertyBinder().beanWrapperFor(createdElement);
+                BeanWrapper activeComponent = viewPropertyBinder.beanWrapperFor(createdElement);
                 activeComponent.setConversionService(conversionService);
 
                 // Apply defaults for any class that is in the target class hierarchy
-                parseContext.getDefaultValues().forEach((clazz, defaults) -> {
-                    if (clazz.isAssignableFrom(definedObjectType)) {
-                        defaults.forEach(activeComponent::setPropertyValue);
-                    }
-                });
+                Map<String,Object> defaultValuesForComponent = defaultValues.get(componentName);
+                if (null != defaultValuesForComponent) {
+                    defaultValuesForComponent.forEach(activeComponent::setPropertyValue);
+                }
 
                 // Walk through all the key/value pairs for this component.
-                ctx.kvPair().forEach(kvPairContext -> handleKVPairForComponent(activeComponent, kvPairContext));
+                ctx.kvPair().forEach(kvPairContext -> handleKVPairForComponent(createdElement, kvPairContext));
             } else {
                 log.error("Cannot create {}, no such class or class is abstract", classAlias);
                 cleanParse = false;
@@ -552,32 +510,80 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     /**
      * Called to handle a single key/value pair when creating a component.
      *
-     * @param activeComponent The component being created
+     * @param createdElement The component being created
      * @param kvPairContext The KV pair to process
      */
-    private void handleKVPairForComponent(BeanWrapper activeComponent, SpwingViewFileParser.KvPairContext kvPairContext) {
+    private void handleKVPairForComponent(final Object createdElement,
+                                          final SpwingViewFileParser.KvPairContext kvPairContext) {
 
         // Get the property name and declared value.
         final String propertyName = kvPairContext.k.getText();
-        final DeclaredValue declaredValue = new DeclaredValue(kvPairContext.v);
+        if (null != kvPairContext.fixedValue()) {
+            // It's a fixed value. Handle it as such
+            handleFixedComponentValue(createdElement, propertyName, kvPairContext.fixedValue());
+        } else {
+            handleBoundComponentValue(createdElement, propertyName, kvPairContext.boundValue());
+        }
+    }
+
+
+    /**
+     * Handles inline bindings (the '=>' operator inside a component
+     * definition). This creates a binding between the Swing value and
+     * the model property value.
+     * @param createdElement The Swing component
+     * @param propertyName The Swing component property being bound
+     * @param boundValueContext The parser context
+     */
+    private void handleBoundComponentValue(final Object createdElement,
+                                           final String propertyName,
+                                           final SpwingViewFileParser.BoundValueContext boundValueContext )
+    {
+
+        // Get the accessor for the model object property being used. Inline
+        // binding expressions (part of the component definition) can only
+        // reference the model object. For more complex bindings - groups,
+        // other objects, etc. - use the 'bind' statement
+        String expression = ANTLRUtils.stripStringLiteral(boundValueContext.e);
+        Accessor accessor = viewPropertyBinder.toAccessor(modelObject, expression);
+
+        if (accessor instanceof PropertyAccessor) {
+            final List<RefreshTrigger> refreshTriggers = viewPropertyBinder.getRefreshTriggers(applicationContext, modelObject, expression, List.of());
+            viewPropertyBinder.bind(createdElement, propertyName, accessor, refreshTriggers);
+        } else {
+            log.error( "{} is not a valid model property", expression);
+            cleanParse = false;
+        }
+    }
+
+
+    private void handleFixedComponentValue(final Object createdElement,
+                                           final String propertyName,
+                                           final SpwingViewFileParser.FixedValueContext fixedValueContext  )
+    {
+
+        // Get the declared value
+        final Object declaredValue = getDeclaredValue(fixedValueContext.v);
 
         // Special case the "value" property - we track that internally.
         // TODO special case CSS stylesheet and style clauses
         if ("value".equals(propertyName)) {
-            parseContext.getViewPropertyBinder().setValue(activeComponent.getWrappedInstance(), declaredValue.get());
+            viewPropertyBinder.setValue(createdElement, declaredValue);
         } else {
 
+            final BeanWrapper beanWrapper = viewPropertyBinder.beanWrapperFor(createdElement);
+
             // Get the property type for this component, based on the name given
-            final Class<?> propertyType = activeComponent.getPropertyType(propertyName);
+            final Class<?> propertyType = beanWrapper.getPropertyType(propertyName);
             if (null != propertyType) {
 
                 // Push the value to the component.
-                Object unconvertedValue = declaredValue.get();
-                if (unconvertedValue instanceof ContextualConstant contextualConstant) {
-                    unconvertedValue = contextualConstant.get(ConstantContext.SwingConstants);
+                if (declaredValue instanceof ContextualConstant contextualConstant) {
+                    final Object constantValue = contextualConstant.get(ConstantContext.SwingConstants);
+                    beanWrapper.setPropertyValue(propertyName, conversionService.convert(constantValue, propertyType));
+                } else {
+                    beanWrapper.setPropertyValue(propertyName, conversionService.convert(declaredValue, propertyType));
                 }
-                final Object convertedValue = conversionService.convert(unconvertedValue, propertyType);
-                activeComponent.setPropertyValue(propertyName, convertedValue);
             } else {
 
                 // Bad property name given. Kill the parse.
@@ -588,43 +594,45 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     }
 
 
-    @RequiredArgsConstructor
-    private final class DeclaredValue {
+    /**
+     * Get the declared value for a fixed value declaration. Fixed values are
+     * denoted by being specified by the "=" operator (not the "=>" operator)
+     * and can be determined at the time the SVWF file is parsed. This are
+     * required for default values and available for component values.
+     *
+     * @param valueContext The {@link com.hablutzel.spwing.view.factory.svwf.SpwingViewFileParser.PairValueContext}
+     * @return The found value
+     */
+    private Object getDeclaredValue(SpwingViewFileParser.PairValueContext valueContext ) {
+        if (null != valueContext.bool) {
+            return ANTLRUtils.getBooleanValue(valueContext.bool);
+        } else if (null != valueContext.string) {
+            return ANTLRUtils.stripStringLiteral(valueContext.string);
+        } else if (null != valueContext.floatVal) {
+            return ANTLRUtils.getFloatValue(valueContext.floatVal);
+        } else if (null != valueContext.size) {
+            return new Dimension(ANTLRUtils.getIntValue(valueContext.size.width), ANTLRUtils.getIntValue(valueContext.size.height));
+        } else if (null != valueContext.in) {
+            return new Insets( ANTLRUtils.getIntValue(valueContext.in.top), ANTLRUtils.getIntValue(valueContext.in.left),
+                    ANTLRUtils.getIntValue(valueContext.in.bottom), ANTLRUtils.getIntValue(valueContext.in.right));
+        } else if (null != valueContext.id) {
+            return knownComponents.get(valueContext.id.getText());
+        } else {
 
-        private final SpwingViewFileParser.PairValueContext valueContext;
-
-        public Object get() {
-            if (null != valueContext.bool) {
-                return valueContext.bool.getText().equals("true");
-            } else if (null != valueContext.string) {
-                return stripStringLiteral(valueContext.string);
-            } else if (null != valueContext.floatVal) {
-                return getFloatValue(valueContext.floatVal);
-            } else if (null != valueContext.size) {
-                return parseDimension(valueContext.size);
-            } else if (null != valueContext.in) {
-                return new Insets( getIntValue(valueContext.in.top), getIntValue(valueContext.in.left),
-                        getIntValue(valueContext.in.bottom), getIntValue(valueContext.in.right));
-            } else if (null != valueContext.id) {
-                return parseContext.getKnownComponents().get(valueContext.id.getText());
-            } else {
-                return getIntValue(valueContext.integer);
-            }
-        }
-
-        <T> T as(Class<T> clazz) {
-            return conversionService.convert(get(), clazz);
+            // We know it has to be an integer; it can't be anything else or the parse would fail.
+            return ANTLRUtils.getIntValue(valueContext.integer);
         }
     }
 
+
     private Dimension parseDimension(SpwingViewFileParser.DimensionContext dimensionContext) {
-        return new Dimension(getIntValue(dimensionContext.width), getIntValue(dimensionContext.height));
+        return new Dimension(ANTLRUtils.getIntValue(dimensionContext.width), ANTLRUtils.getIntValue(dimensionContext.height));
     }
 
     @Override
     public void enterLayoutStatement(SpwingViewFileParser.LayoutStatementContext ctx) {
         String componentToLayout = ctx.component.getText();
-        if (parseContext.getKnownComponents().get(componentToLayout) instanceof Container container) {
+        if (knownComponents.get(componentToLayout) instanceof Container container) {
             this.layoutContainer = container;
         } else {
             log.warn("Component {} is not present or not a container", componentToLayout);
@@ -641,7 +649,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     private Object getNamedElement(Token elementToken) {
         final String elementName = elementToken.getText();
-        Object rawElement = parseContext.getKnownComponents().get(elementName);
+        Object rawElement = knownComponents.get(elementName);
 
         // Special case unwrapped icons
         return rawElement instanceof Icon ? wrapIcon(elementName, (Icon) rawElement) : rawElement;
@@ -656,7 +664,8 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 consumer.accept(component);
             } else if (element instanceof Group group) {
                 if (wrapButtonGroup) {
-                    JPanel panel = parseContext.getComponentFactory().newJPanel("_anon_" + token.getText());
+                    JPanel panel = new JPanel();
+                    panel.setName("_anon_" + token.getText());
                     group.components.forEach(panel::add);
                     consumer.accept(panel);
                 } else {
@@ -725,9 +734,8 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 if (null != gridBagElementDescriptionContext.modifiers) {
                     gridBagElementDescriptionContext.modifiers.kvPair().forEach( kvPair -> {
                         String propertyName = kvPair.k.getText();
-                        DeclaredValue declaredValue = new DeclaredValue(kvPair.v);
 
-                        Object unconvertedValue = declaredValue.get();
+                        Object unconvertedValue = getDeclaredValue(kvPair.fixedValue().v);
                         if (unconvertedValue instanceof ContextualConstant contextualConstant) {
                             unconvertedValue = contextualConstant.get(ConstantContext.GridBagConstants);
                         }
@@ -828,15 +836,15 @@ public class SVWFListener extends SpwingViewFileBaseListener {
 
     /**
      * Decode a column specification 'A', 'B', etc into a
-     * corresponding row: 1, 2
+     * corresponding column number: 1, 2
      * <ul>
      *     <li>A => 1</li>
      *     <li>B => 2</li>
      *     <li>AA => 27</li>
      *     <li>etc</li>
      * </ul>
-     * @param columnSpecification
-     * @return
+     * @param columnSpecification The column specification
+     * @return The column number
      */
     public int decodeColumn(String columnSpecification) {
         int columnNumber = 0;
@@ -858,7 +866,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         if (null != layoutContainer) {
 
             // Determine whether we are arranging horizontally or vertically and create the layout
-            int axis = tokenEquals("vertical", ctx.orientation) ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS;
+            int axis = ANTLRUtils.tokenEquals("vertical", ctx.orientation) ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS;
             setLayout(container -> new BoxLayout(container, axis));
 
             ctx.boxElement().forEach(boxElementContext -> {
@@ -904,7 +912,6 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                 String direction = borderElementContext.direction.getText();
 
                 // Special case - if we get an Icon, then wrap it in a label for display
-                Object element = getNamedElement(borderElementContext.identifierElement().element);
                 onNamedComponent(borderElementContext.identifierElement().element, component -> {
                     switch (direction) {
                         case "east" -> layoutContainer.add(component, BorderLayout.EAST);
@@ -934,38 +941,24 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         return result;
     }
 
-    /**
-     * Return an int value from a Integer_Literal token.
-     * This will deal with both decimal and hex values
-     */
-    @SuppressWarnings("unused")
-    public int getIntValue(Token token) {
-        int radix = 10;
-        int offset = 0;
-        String text = token.getText();
-        if (text.startsWith("0x")) {
-            radix = 16;
-            offset = 2;
-        }
-        return Integer.parseInt(text, offset, text.length(), radix);
-    }
-
-
-    public boolean getBooleanValue(Token token) {
-        return tokenEquals("true", token);
-    }
-
-    public float getFloatValue(Token token) {
-        return Float.parseFloat(token.getText());
-    }
-
 
     public Component rootComponent() {
-        return parseContext.getKnownComponents().values().stream()
+        return knownComponents.values().stream()
                 .filter(component -> component instanceof JFrame)
                 .map(component -> (JFrame) component)
                 .findFirst()
                 .orElse(null);
+    }
+
+
+    /**
+     * Add a new component to the set the listener knows about
+     *
+     * @param componentName The component name
+     * @param component The component (often, but not always, a Swing component)
+     */
+    public void addComponent(String componentName, Object component) {
+        knownComponents.put(componentName, component);
     }
 
 

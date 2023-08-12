@@ -19,16 +19,13 @@ package com.hablutzel.spwing.view.factory.svwf;
 
 import com.hablutzel.spwing.Spwing;
 import com.hablutzel.spwing.annotations.Model;
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import lombok.extern.slf4j.Slf4j;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
-import org.springframework.context.ApplicationContext;
-import org.springframework.core.convert.ConversionService;
 
-import java.awt.*;
+import java.awt.Component;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -36,7 +33,7 @@ import java.io.InputStream;
 @Slf4j
 public class SVWFViewFactory {
     /**
-     * The {@link #fromStream(Object, Spwing, InputStream)}
+     * The {@link #fromStream(Spwing, Object, InputStream)}
      * method creates a set of Swing components as described by the SVWF file accessed by the given
      * input stream.
      *
@@ -46,25 +43,15 @@ public class SVWFViewFactory {
      * @return A new root component for the view
      * @throws IOException If the stream cannot be read
      */
-    public Component fromStream(final @Model Object model,
-                                final Spwing spwing,
+    public Component fromStream(final Spwing spwing,
+                                final @Model Object model,
                                 final InputStream viewDescriptionFile) throws IOException {
 
         if (null != viewDescriptionFile) {
 
-            // Get the conversion service and document event dispatcher
-            final ApplicationContext applicationContext = spwing.getApplicationContext();
-            final DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
-            final ConversionService conversionService = applicationContext.getBean(ConversionService.class);
-
-            // Create a component map for this parse, and include all the predefined components.
-            SVWFParseContext svwfParseContext = new SVWFParseContext( spwing, applicationContext, documentEventDispatcher);
-
             // Create a listener for the parse tree. This will control the actual logic
             // for taking the actions implied by the parse tree
-            final SVWFListener listener = new SVWFListener(
-                    model, spwing, applicationContext,
-                    conversionService, documentEventDispatcher, svwfParseContext);
+            final SVWFListener listener = SVWFListener.build(spwing, model);
 
             // Parse the input stream using the ANTLR parser
             final CharStream charStream = CharStreams.fromStream(viewDescriptionFile);

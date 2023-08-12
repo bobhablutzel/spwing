@@ -17,14 +17,6 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
-import org.springframework.context.ApplicationContext;
-
-
-
 public interface SVWFComponentFactory {
-    default void addComponents(SVWFParseContext parseContext, ApplicationContext applicationContext) {
-        addComponents(parseContext);
-    }
-
-    void addComponents(SVWFParseContext parseContext);
+    void addComponents(final SVWFListener listener);
 }

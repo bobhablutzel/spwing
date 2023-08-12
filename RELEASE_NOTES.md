@@ -15,6 +15,36 @@ The <i><u>ridiculously</u></i> easy cross-platform GUI framework
 
 ### Release Notes
 
+
+#### Version 0.6.1
+- Binding has been simplified in two ways.
+  - In SVWF files, model properties can be bound to Swing component properties 
+    directly at component definition time by using the bind operator '=>' instead
+    of the assignment operator '=". For example, the following code binds the 
+    JLabel text field to the "name" field of the model object.
+  
+        label: JTextField( text => "name" ); 
+
+    This binding will be bidirectional if the property is writable, so changes
+    to the text field will result in changes to the model
+  
+  - In order to allow for more complicated models, you can specify property paths
+    in addition to simple property names
+
+        label: JTextField( text => "person.name" ); 
+
+    This represents a path from the root model object, to a field named ```person```, which
+    itself represents a class with a field named ```name```. Since these are properties,
+    the classes should implement a class that accepts ```PropertyChangeListener``` instances
+    and reports that properties have changed. However, you don't want the embedded class to 
+    know that it is part of the hierarchy, so it should just signal that the ```name``` property
+    changed. Spwing will build a bridge from there to the ```person.name``` that needs to be
+    signalled in order to trigger the changes to the Swing object. This happens automatically
+    so long as both the leaf class and the root model class accept change listeners.
+  - The path given above is simple, but more complex paths including collections, etc are possible.
+    Just be aware that the path itself cannot change; in other words if you add or more items
+    from the collection the path name may not be correct.
+
 #### Version 0.6.0
 Big changes in this version, hence the bump in version number. A lot
 of the changes are intended to make the model class more Java generic.

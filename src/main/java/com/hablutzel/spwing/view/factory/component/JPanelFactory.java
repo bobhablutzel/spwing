@@ -15,17 +15,34 @@
  *
  */
 
-package com.hablutzel.spwing.view.factory.svwf;
+package com.hablutzel.spwing.view.factory.component;
 
-import com.hablutzel.spwing.util.Colors;
+import com.hablutzel.spwing.view.adapter.JPanelEventAdapter;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
+import javax.swing.JPanel;
 
+/**
+ * Create a new {@link JPanel} instance, including registering an
+ * event adapter for that instance with the current document event dispatcher.
+ *
+ * @author Bob Hablutzel
+ */
 @Service
-public class SVWFColorFactory implements SVWFComponentFactory {
+@Scope("singleton")
+@Slf4j
+public final class JPanelFactory extends AbstractViewComponentFactory<JPanel> {
 
     @Override
-    public void addComponents(final SVWFListener listener) {
-        Colors.htmlColors.forEach(listener::addComponent);
+    public JPanel build(final String name) {
+        return registerAdapter(new JPanel(), name, JPanelEventAdapter::new);
     }
+
+    @Override
+    public String alias() {
+        return "JPanel";
+    }
+
 }

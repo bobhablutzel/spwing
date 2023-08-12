@@ -15,17 +15,34 @@
  *
  */
 
-package com.hablutzel.spwing.view.factory.svwf;
+package com.hablutzel.spwing.view.factory.component;
 
-import com.hablutzel.spwing.util.Colors;
+import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
+import javax.swing.JLabel;
 
+/**
+ * Create a new {@link JLabel} instance, including registering an
+ * event adapter for that instance with the current document event dispatcher.
+ *
+ * @author Bob Hablutzel
+ */
 @Service
-public class SVWFColorFactory implements SVWFComponentFactory {
+@Scope("singleton")
+@Slf4j
+public final class JLabelFactory extends AbstractViewComponentFactory<JLabel> {
 
     @Override
-    public void addComponents(final SVWFListener listener) {
-        Colors.htmlColors.forEach(listener::addComponent);
+    public JLabel build(final String name) {
+        return registerAdapter(new JLabel(), name, JLabelEventAdapter::new);
     }
+
+    @Override
+    public String alias() {
+        return "JLabel";
+    }
+
 }
