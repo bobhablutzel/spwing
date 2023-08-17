@@ -22,17 +22,17 @@ notice. However, the basic functionality works.
 
 ## Features
 
-- Automatic multi-document support
 - A preference for convention over configuration combined with simple configuration when convention doesn't work
+- Automatic multi-document support
 - Annotation support for configuration
 - Automatic integration for native look & feel
 - Automatic support for saving and opening files
 - Automatic platform-specific resource resolution
   - Sensitive to platform and version
   - Used for localization, views, and menus
-- Descriptive language for JFrame descriptions
+- Descriptive language for Swing component descriptions
   - Replaces multiple lines of Java with one succinct, intuitive declaration
-  - Includes flexible binding mechanisms to any model or controller
+  - Includes flexible bidirectional binding mechanisms to any model or controller, even in hierarchies
   - Extensible for custom components
 - Extremely flexible method discovery and invocation
 - Integrated AWT and Spring event processing
@@ -41,10 +41,9 @@ notice. However, the basic functionality works.
 
 ## Roadmap
 - Replace the current json based menu specification with a DSL
-- Better structural support for models (submodels,controllers,views)
 - Support all Swing visual components
-  - (Currently supported: JLabel, JTextField, JRadioButton, JCheckBox, JButton)
-- Additional binding implementations
+  - Currently supported: ImageIcons, Buttons, CheckBoxes, ComboBoxes, Date Spinners, Formatted Text fields,
+    Labels, List Spinners, Number Spinners, Password Text fields, Radio Buttons, Text Fields
 - Splash screen
 - Preferences dialog & storage
 - Testing and support for Windows & Linux
@@ -52,13 +51,13 @@ notice. However, the basic functionality works.
 ## Obtaining
 
 Spwing is available on major Maven repositories. The current
-version is 0.5.1.
+version is 0.6.2.
 
 ```xml
         <dependency>
             <groupId>com.hablutzel.spwing</groupId>
             <artifactId>spwing</artifactId>
-            <version>0.5.1</version>
+            <version>0.6.2</version>
         </dependency>
 ```
 ## Demos
