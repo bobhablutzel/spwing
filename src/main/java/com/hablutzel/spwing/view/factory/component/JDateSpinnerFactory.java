@@ -17,17 +17,21 @@
 
 package com.hablutzel.spwing.view.factory.component;
 
+import com.hablutzel.spwing.view.bind.Accessor;
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JSpinner;
 import javax.swing.SpinnerDateModel;
-import javax.swing.SpinnerModel;
+import java.util.Date;
+import java.util.List;
 
 /**
- * Create a new {@link JSpinner} instance, including registering an
- * event adapter for that instance with the current document event dispatcher.
+ * Create a new date {@link JSpinner} instance.
  *
  * @author Bob Hablutzel
  */
@@ -41,7 +45,119 @@ public class JDateSpinnerFactory extends AbstractSpinnerFactory {
         return "JDateSpinner";
     }
 
-    protected SpinnerModel getModel() {
-        return new SpinnerDateModel();
+    @Override
+    protected Cocoon<JSpinner> buildCocoon(final ConversionService conversionService) {
+
+        final SpinnerDateModel spinnerDateModel = new SpinnerDateModel();
+        final JSpinner spinner = new JSpinner(spinnerDateModel);
+        final JSpinner.DateEditor dateEditor = new JSpinner.DateEditor(spinner);
+        spinner.setEditor(dateEditor);
+
+
+        return new JDateSpinnerCocoon(spinner, conversionService, spinnerDateModel);
+    }
+
+
+    /**
+     * Cocoon for JDateSpinner instances
+     *
+     * @author Bob Hablutzel
+     */
+    private class JDateSpinnerCocoon extends Cocoon<JSpinner> {
+
+        private final JSpinner spinner;
+        private final SpinnerDateModel spinnerDateModel;
+
+        public JDateSpinnerCocoon(JSpinner spinner, ConversionService conversionService, SpinnerDateModel spinnerDateModel) {
+            super(spinner, JDateSpinnerFactory.this, conversionService);
+            this.spinner = spinner;
+            this.spinnerDateModel = spinnerDateModel;
+        }
+
+        /**
+         * Add support for the date spinner specific properties
+         *
+         * @param propertyName The property name
+         * @return TRUE if the property can be set
+         */
+        @Override
+        public boolean canSetProperty(String propertyName) {
+            return switch (propertyName) {
+                case "model" -> false;
+                case "value", "format", "start", "startDate", "end", "endDate", "field", "calendarField" -> true;
+                default -> super.canSetProperty(propertyName);
+            };
+        }
+
+        /**
+         * Set the property from the specified value
+         *
+         * @param propertyName The property name
+         * @param value The value to set
+         */
+        @Override
+        public void setProperty(String propertyName, Object value) {
+            switch (propertyName) {
+                case "value" -> spinner.getModel().setValue(value);
+                case "format" -> spinner.setEditor(new JSpinner.NumberEditor(spinner, getAs(value, String.class)));
+                case "start", "stateDate" -> spinnerDateModel.setStart(getAs(value, Date.class));
+                case "end", "endDate" -> spinnerDateModel.setEnd(getAs(value, Date.class));
+                case "field", "calendarField" -> spinnerDateModel.setCalendarField(getAs(value, Integer.class));
+                default -> super.setProperty(propertyName, value);
+            }
+        }
+
+
+
+        /**
+         * Set our custom properties
+         * @param propertyName The property name
+         * @param externalState The external state {@link Accessor}
+         */
+        @Override
+        public void setFromAccessor(String propertyName, Accessor externalState) {
+            switch (propertyName) {
+                case "value" -> spinner.getModel().setValue(getExternalState(externalState, Object.class));
+                case "format" -> spinner.setEditor(new JSpinner.NumberEditor(spinner, getExternalState(externalState, String.class)));
+                case "start", "stateDate" -> spinnerDateModel.setStart(getExternalState(externalState, Date.class));
+                case "end", "endDate" -> spinnerDateModel.setEnd(getExternalState(externalState, Date.class));
+                case "field", "calendarField" -> spinnerDateModel.setCalendarField(getExternalState(externalState, Integer.class));
+                default -> super.setFromAccessor(propertyName, externalState);
+            }
+        }
+
+        /**
+         * Get the allowable bindings for our custom properties
+         * @param propertyName The property name
+         * @return The allowable bindings
+         */
+        @Override
+        public AllowedBindings allowedBindings(String propertyName) {
+            return switch (propertyName) {
+                case "model" -> AllowedBindings.NONE;
+                case "format", "start", "startDate", "end", "endDate", "field", "calendarField" -> AllowedBindings.FROM_MODEL;
+                default -> super.allowedBindings(propertyName);
+            };
+        }
+
+
+        /**
+         * Add special case processing for the value property
+         * @param propertyName The property name
+         * @param externalState The external state {@link Accessor}
+         * @param refreshTriggers The list of {@link RefreshTrigger} that trigger a refresh
+         *                        of the external state. The model will initiate these.
+         */
+        @Override
+        public void bindProperty(String propertyName, Accessor externalState, List<RefreshTrigger> refreshTriggers) {
+            super.bindProperty(propertyName, externalState, refreshTriggers);
+            if ("value".equals(propertyName) && externalState.isWriteable()) {
+                spinnerDateModel.addChangeListener(evt -> {
+                    if (!spinnerDateModel.getDate().equals(externalState.get())) {
+                        externalState.set(spinnerDateModel.getValue());
+                    }
+                });
+            }
+        }
     }
 }

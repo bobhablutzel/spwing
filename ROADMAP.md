@@ -22,29 +22,29 @@ mechanically created and likely contains components that will not
 be directly supported as they are internal to other components or abstract)
   - ~~javax.swing.Box~~ use boxLayout keywords
   - ~~javax.swing.CellRendererPane~~ part of table support
-  - javax.swing.JSpinner
-  - javax.swing.JSpinner.DateEditor
-  - javax.swing.JSpinner.DefaultEditor
-  - javax.swing.JSpinner.ListEditor
-  - javax.swing.JSpinner.NumberEditor
+  - ~~javax.swing.JSpinner~~
+  - ~~javax.swing.JSpinner.DateEditor~~
+  - ~~javax.swing.JSpinner.DefaultEditor~~
+  - ~~javax.swing.JSpinner.ListEditor~~
+  - ~~javax.swing.JSpinner.NumberEditor~~
   - ~~javax.swing.DefaultListCellRenderer~~ part of table support
   - javax.swing.JCheckBoxMenuItem
   - javax.swing.JColorChooser
-  - javax.swing.JComboBox
+  - ~~javax.swing.JComboBox~~
   - javax.swing.JInternalFrame.JDesktopIcon
-  - javax.swing.JDesktopPane
+  - ~~~javax.swing.JDesktopPane~~~
   - javax.swing.JEditorPane
-  - javax.swing.JFileChooser
-  - javax.swing.JFormattedTextField
+  - ~~~javax.swing.JFileChooser~~~
+  - ~~~javax.swing.JFormattedTextField~~~
   - javax.swing.JInternalFrame
   - javax.swing.JLayer
   - javax.swing.JLayeredPane
   - javax.swing.JList
-  - javax.swing.JMenu
-  - javax.swing.JMenuBar
-  - javax.swing.JMenuItem
+  - ~~~javax.swing.JMenu~~~
+  - ~~~javax.swing.JMenuBar~~~
+  - ~~~javax.swing.JMenuItem~~~
   - javax.swing.JOptionPane
-  - javax.swing.JPasswordField
+  - ~~~javax.swing.JPasswordField~~~
   - javax.swing.JPopupMenu
   - javax.swing.JProgressBar
   - javax.swing.JRadioButtonMenuItem
@@ -53,7 +53,7 @@ be directly supported as they are internal to other components or abstract)
   - javax.swing.JScrollPane
   - javax.swing.JSeparator
   - javax.swing.JSlider
-  - javax.swing.JSpinner
+  - ~~~javax.swing.JSpinner~~~
   - javax.swing.JSplitPane
   - javax.swing.JTabbedPane
   - javax.swing.JTable
@@ -84,7 +84,7 @@ be directly supported as they are internal to other components or abstract)
 
 # Goals
 - 0.6.5 release   Support all layout managers and components
-- 0.7 release   Support nested / hierarchical models
+- ~~~0.7 release   Support nested / hierarchical models~~~ This came in 0.6.1
 - 0.8 release   Revisit menu management / dynamic menu support
 - 0.9 release   Additional features TBD plus a lot of debugging & performance tuning
 - 1.0 release   Stable and fully functional

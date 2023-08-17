@@ -140,6 +140,7 @@ pairValue
     | bool=Boolean_Literal
     | floatVal=Float_Literal
     | id=Identifier
+    | AT bean=Identifier
     | size=dimension
     | in=inset
     ;

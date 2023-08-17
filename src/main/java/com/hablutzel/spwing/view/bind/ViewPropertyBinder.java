@@ -17,39 +17,19 @@
 
 package com.hablutzel.spwing.view.bind;
 
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.model.PropertyChangeModel;
-import com.hablutzel.spwing.util.FlexpressionParser;
 import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
-import com.hablutzel.spwing.view.bind.impl.DocumentEventRefreshTrigger;
 import com.hablutzel.spwing.view.bind.impl.GenericPropertyBinder;
-import com.hablutzel.spwing.view.bind.impl.PropertyListenerRefreshTrigger;
-import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.convert.ConversionService;
-import org.springframework.expression.Expression;
-import org.springframework.expression.ParseException;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.lang.NonNull;
-import org.springframework.lang.Nullable;
 
 import javax.swing.*;
 import java.awt.Component;
 import java.awt.Font;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.beans.PropertyDescriptor;
-import java.beans.PropertyEditor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -57,8 +37,6 @@ import java.util.stream.Collectors;
 public class ViewPropertyBinder {
 
     private final ApplicationContext applicationContext;
-    private final ConversionService conversionService;
-
     private final Map<Object, Object> valueMap = new HashMap<>();
 
     private final Map<Object, BeanWrapper> beanWrapperMap = new HashMap<>();
@@ -75,7 +53,6 @@ public class ViewPropertyBinder {
      */
     public ViewPropertyBinder(final ApplicationContext applicationContext ) {
         this.applicationContext = applicationContext;
-        this.conversionService = applicationContext.getBean(ConversionService.class);
 
         // Get all the binder services, and add the (non-service) last chance binder
         // by hand.
@@ -93,179 +70,6 @@ public class ViewPropertyBinder {
             beanWrapperMap.put(object, new BeanWrapperImpl(object));
         }
         return beanWrapperMap.get(object);
-    }
-
-
-    /**
-     * Define the value for a component. This is used for some bindings
-     * @param component The component to remember a value for
-     * @param value The value to remember
-     */
-    public void setValue(@NonNull final Object component, @NonNull final Object value) {
-        valueMap.put(component, value);
-    }
-
-    /**
-     * Takes the given expression (a property path, SPEL expression, literal, etc.)
-     * and turns it into an {@link Accessor}. The expression will first be evaluated
-     * as a property path on the supplied bean. If it is a readable property, then
-     * a {@link PropertyAccessor} will be created. If not, the expression will be
-     * evaluated to see if it can be handled by a {@link FlexpressionParser}
-     * (which can include system properties, SPEL expression, static method calls,
-     * arbitrary beans, and more). In this case, a {@link FlexpressionAccessor}
-     * will be created. If it is neither a property path nor a Flexpression,
-     * it will be take as a literal.
-     *
-     * @param targetObject The object to act as a property source for property paths
-     * @param valueExpression The expression
-     * @return A new accessor
-     */
-
-    public Accessor toAccessor(@Nullable final Object targetObject, final String valueExpression) {
-
-        // First preference: A property, as this will allow read/write
-        if (null != targetObject) {
-            BeanWrapper targetBeanWrapper = beanWrapperFor(targetObject);
-            if (targetBeanWrapper.isReadableProperty(valueExpression)) {
-                return new PropertyAccessor(targetBeanWrapper, valueExpression, conversionService);
-            }
-        }
-
-        log.warn( "{} is not a property of {} and will read-only", valueExpression, targetObject );
-        // Not a property, try a SPEL expression. Allows more flexibility than a property
-        // but isn't writeable
-        try {
-            SpelExpressionParser parser = new SpelExpressionParser();
-            Expression spelExpression = parser.parseExpression(valueExpression);
-            StandardEvaluationContext context = new StandardEvaluationContext(targetObject);
-            return new SpelExpressionAccessor(spelExpression, context, conversionService);
-        } catch (ParseException e) {
-            log.debug( "Unable to treat {} as an expression", valueExpression, e);
-        }
-
-        // Next try is a flexpression, which can be used to pull in application properties
-        if (FlexpressionParser.appearsToBeFlexpression(valueExpression)) {
-            return new FlexpressionAccessor(valueExpression, applicationContext, conversionService);
-        }
-
-        // Last chance, a literal
-        return  new LiteralAccessor(valueExpression, conversionService);
-    }
-
-
-    public List<RefreshTrigger> getRefreshTriggers(final ApplicationContext applicationContext,
-                                                      final Object targetObject,
-                                                      final String propertyName,
-                                                      final List<String> triggers ) {
-
-        // If the list of triggers is non-empty, then we need to look for document events
-        if (!triggers.isEmpty()) {
-            DocumentEventDispatcher documentEventDispatcher = DocumentEventDispatcher.get(applicationContext);
-
-            return triggers.stream()
-                    .map(trigger -> new DocumentEventRefreshTrigger(applicationContext, documentEventDispatcher, trigger))
-                    .map(RefreshTrigger.class::cast)
-                    .toList();
-        } else {
-
-            Consumer<PropertyChangeListener> addListenerFunc = getAddChangeListener(targetObject);
-            if (null != addListenerFunc) {
-                PropertyListenerRefreshTrigger refreshTrigger = buildRefreshTrigger(targetObject, propertyName);
-                addListenerFunc.accept(refreshTrigger);
-                return List.of(refreshTrigger);
-            } else {
-                return List.of();
-            }
-        }
-    }
-
-
-    /**
-     * Get the function that adds a property change listener to an object.
-     *
-     * @param targetObject The target object
-     * @return A (potentially null) {@link Consumer<PropertyChangeListener>}
-     */
-    private Consumer<PropertyChangeListener> getAddChangeListener(final Object targetObject ) {
-        if (targetObject instanceof PropertyEditor propertyEditor) {
-            return propertyEditor::addPropertyChangeListener;
-        } else if (targetObject instanceof PropertyChangeModel propertyChangeModel) {
-            return propertyChangeModel::addPropertyChangeListener;
-        } else {
-            // Reflective approach
-            Optional<Method> optionalAddListenerMethod = Arrays.stream(targetObject.getClass().getMethods())
-                    .filter(method -> !Modifier.isStatic(method.getModifiers()) &&
-                            !Modifier.isAbstract(method.getModifiers()) &&
-                            method.getName().equals("addPropertyChangeListener") &&
-                            method.getParameters().length == 1 &&
-                            method.getParameters()[0].getType().equals(PropertyChangeListener.class))
-                    .findFirst();
-            if (optionalAddListenerMethod.isPresent()) {
-                final Method addListenerMethod = optionalAddListenerMethod.get();
-                return propertyChangeListener -> {
-                    try {
-                        addListenerMethod.invoke(targetObject, propertyChangeListener);
-                    } catch (IllegalAccessException | InvocationTargetException e) {
-                        log.warn("Method {} of {} could not be invoked, no refresh trigger. ",
-                                addListenerMethod.getName(), targetObject.getClass().getName());
-                    }
-                };
-            }
-        }
-        return null;
-    }
-
-
-    /**
-     * Build a {@link PropertyListenerRefreshTrigger} for the object and property.
-     * This will also add an additional property listener, if needed, to the
-     * leaf node property so that the leaf node signalling a change will be
-     * propogated to the target object.
-     *
-     * @param targetObject The target object
-     * @param propertyName The property name (or expression)
-     * @return A {@link PropertyListenerRefreshTrigger} instance
-     */
-    private PropertyListenerRefreshTrigger buildRefreshTrigger( final Object targetObject,
-                                                  final String propertyName ) {
-
-        final BeanWrapper beanWrapper = beanWrapperFor(targetObject);
-        final PropertyDescriptor propertyDescriptor = beanWrapper.getPropertyDescriptor(propertyName);
-
-        // There are two potential cases here. First, the property could be a simple
-        // property on the target object. In this case, we can just build a property
-        // listener and use that. However, in some cases the property name passed in
-        // is actually a property expression, and therefore the leaf property name
-        // and the expression will differ. In this case, we need to add a bridge listener
-        final String leafName = propertyDescriptor.getName();
-        final PropertyListenerRefreshTrigger result = new PropertyListenerRefreshTrigger(propertyName);
-        if (!propertyName.equals(leafName)) {
-
-            // This is the case where the property name is a property path, so we can
-            // listen to changes on the parent. We chop off the end of the property
-            // path in order to get the property path that references the parent
-            final String parentPath = propertyName.substring(0, propertyName.length() - leafName.length() - 1 );
-
-            final Object parentObject = beanWrapper.getPropertyValue(parentPath);
-            if (null != parentObject) {
-                Consumer<PropertyChangeListener> addParentListener = getAddChangeListener(parentObject);
-                if (null != addParentListener) {
-                    addParentListener.accept(evt -> {
-                        if (evt.getPropertyName().equals(leafName)) {
-                            result.propertyChange(new PropertyChangeEvent(parentObject, propertyName, evt.getOldValue(), evt.getNewValue()));
-                        }
-                    });
-                } else {
-                    log.error("Parent property defined by {} does not emit property events", parentPath);
-                }
-            } else {
-                log.error( "Could not resolve parent property {}", parentPath );
-            }
-        }
-
-        return result;
-
-
     }
 
 

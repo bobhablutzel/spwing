@@ -17,6 +17,9 @@
 
 package com.hablutzel.spwing.view.factory.component;
 
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
+import org.springframework.core.convert.ConversionService;
+
 import java.awt.Component;
 
 /**
@@ -32,11 +35,14 @@ import java.awt.Component;
 public interface ViewComponentFactory<T extends Component> {
 
     /**
-     * Build a new instance with the supplied name
+     * Build a new instance with the supplied name. Starting with
+     * 0.6.2, this returns a {@link Cocoon} instance that can be used
+     * to continue to evolve the component during the view build process.
+     *
      * @param name The name
-     * @return A new T instance
+     * @return A new {@link Cocoon<T>} instance
      */
-    T build(final String name);
+    Cocoon<T> build(final String name, final ConversionService conversionService);
 
 
     /**

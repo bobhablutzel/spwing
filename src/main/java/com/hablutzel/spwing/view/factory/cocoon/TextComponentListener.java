@@ -1,5 +1,5 @@
 /*
- * Copyright © 2023, Hablutzel Consulting, LLC.
+ * Copyright © 2023. Hablutzel Consulting, LLC. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,21 +12,22 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package com.hablutzel.spwing.view.factory;
+package com.hablutzel.spwing.view.factory.cocoon;
 
+import com.hablutzel.spwing.view.bind.Accessor;
 import lombok.RequiredArgsConstructor;
 
-import javax.swing.*;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
-import java.util.function.Consumer;
 
 @RequiredArgsConstructor
-class TextComponentListener implements DocumentListener {
-    private final Consumer<String> setter;
+public class TextComponentListener implements DocumentListener {
+    private final Accessor externalState;
     private final JTextComponent textComponent;
     private int lastChange;
     private int lastNotifiedChange;
@@ -47,7 +48,10 @@ class TextComponentListener implements DocumentListener {
         SwingUtilities.invokeLater(() -> {
             if (lastNotifiedChange != lastChange) {
                 lastNotifiedChange = lastChange;
-                setter.accept(textComponent.getText());
+                String text = textComponent.getText();
+                if (!text.equals(externalState.get())) {
+                    externalState.set(textComponent.getText());
+                }
             }
         });
     }

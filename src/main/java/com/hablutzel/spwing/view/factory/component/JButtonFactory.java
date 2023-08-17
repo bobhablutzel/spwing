@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JButtonEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JButton;
@@ -35,9 +37,12 @@ import javax.swing.JButton;
 @Slf4j
 public final class JButtonFactory extends AbstractViewComponentFactory<JButton> {
 
+
     @Override
-    public JButton build(final String name) {
-        return registerAdapter(new JButton(), name, JButtonEventAdapter::new);
+    public Cocoon<JButton> build(String name, ConversionService conversionService) {
+        JButton button = new JButton();
+        registerAdapter(button, name, JButtonEventAdapter::new);
+        return new Cocoon<>(button, this, conversionService);
     }
 
     @Override

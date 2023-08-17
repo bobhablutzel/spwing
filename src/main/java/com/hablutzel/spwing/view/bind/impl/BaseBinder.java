@@ -20,6 +20,7 @@ package com.hablutzel.spwing.view.bind.impl;
 import com.hablutzel.spwing.view.bind.Accessor;
 import com.hablutzel.spwing.view.bind.Binder;
 import com.hablutzel.spwing.view.bind.PropertyAccessor;
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.context.ApplicationContext;
@@ -73,7 +74,7 @@ public abstract class BaseBinder implements Binder {
             if (authoritativeValue.canSupply(viewPropertyType)) {
 
                 // Get a consumer for writing to this property, and bind it to the accessor
-                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers, applicationContext);
+                bindWithRefresh(viewPropertyAccessor, authoritativeValue, triggers);
 
             }
         }
@@ -91,15 +92,13 @@ public abstract class BaseBinder implements Binder {
      * processed the accessor will be re-evaluated for the current value
      * and the setter will be re-invoked.
      *
-     * @param viewPropertyAccessor The view accessor
+     * @param viewPropertyAccessor  The view accessor
      * @param authoritativeAccessor The accessor (typically a {@link PropertyAccessor} for a model property
-     * @param triggers The trigger list for re-evaluating the accessor
-     * @param expectedClass      The expected type being accessed.
+     * @param triggers              The trigger list for re-evaluating the accessor
      */
     protected void bindWithRefresh(final Accessor viewPropertyAccessor,
                                  final Accessor authoritativeAccessor,
-                                 final List<RefreshTrigger> triggers,
-                                 final ApplicationContext applicationContext) {
+                                 final List<RefreshTrigger> triggers) {
 
 
         // Set the value

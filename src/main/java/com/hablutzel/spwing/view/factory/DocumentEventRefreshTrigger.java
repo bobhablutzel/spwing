@@ -15,33 +15,24 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind;
+package com.hablutzel.spwing.view.factory;
 
+
+import com.hablutzel.spwing.events.DocumentEventDispatcher;
+import com.hablutzel.spwing.events.DocumentEventInvoker;
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
 import lombok.RequiredArgsConstructor;
-import lombok.ToString;
-import org.springframework.core.convert.ConversionService;
+import org.springframework.context.ApplicationContext;
 
 @RequiredArgsConstructor
-@ToString
-public class LiteralAccessor extends Accessor {
-    private final Object value;
-    @ToString.Exclude
-    private final ConversionService conversionService;
+public class DocumentEventRefreshTrigger implements RefreshTrigger {
 
-    public boolean isWriteable() {
-        return false;
-    }
-
-    public void set(Object value) {
-        throw new UnsupportedOperationException();
-    }
-
-    public Object get() {
-        return value;
-    }
+    private final ApplicationContext applicationContext;
+    private final DocumentEventDispatcher documentEventDispatcher;
+    private final String trigger;
 
     @Override
-    public boolean canSupply(Class<?> targetClass) {
-        return conversionService.canConvert(value.getClass(), targetClass);
+    public void onRefresh(final Runnable runnable) {
+        documentEventDispatcher.registerListener(trigger, DocumentEventInvoker.from(applicationContext, runnable));
     }
 }

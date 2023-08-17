@@ -17,17 +17,20 @@
 
 package com.hablutzel.spwing.view.factory.component;
 
+import com.hablutzel.spwing.view.bind.Accessor;
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JSpinner;
 import javax.swing.SpinnerListModel;
-import javax.swing.SpinnerModel;
+import java.util.List;
 
 /**
- * Create a new {@link JSpinner} instance, including registering an
- * event adapter for that instance with the current document event dispatcher.
+ * Create a list {@link JSpinner} instance
  *
  * @author Bob Hablutzel
  */
@@ -41,7 +44,106 @@ public class JListSpinnerFactory extends AbstractSpinnerFactory {
         return "JListSpinner";
     }
 
-    protected SpinnerModel getModel() {
-        return new SpinnerListModel();
+    @Override
+    protected Cocoon<JSpinner> buildCocoon(final ConversionService conversionService) {
+
+        final SpinnerListModel spinnerListModel = new SpinnerListModel();
+        final JSpinner spinner = new JSpinner(spinnerListModel);
+        final JSpinner.ListEditor listEditor = new JSpinner.ListEditor(spinner);
+        spinner.setEditor(listEditor);
+
+        return new JListSpinnerCocoon(spinner, conversionService, spinnerListModel);
+    }
+
+
+    /**
+     * Cocoon for JDateSpinner instances
+     *
+     * @author Bob Hablutzel
+     */
+    private class JListSpinnerCocoon extends Cocoon<JSpinner> {
+
+        private final SpinnerListModel spinnerListModel;
+
+        public JListSpinnerCocoon(JSpinner spinner, ConversionService conversionService, SpinnerListModel spinnerListModel) {
+            super(spinner, JListSpinnerFactory.this, conversionService);
+            this.spinnerListModel = spinnerListModel;
+        }
+
+        /**
+         * Add support for the date spinner specific properties
+         *
+         * @param propertyName The property name
+         * @return TRUE if the property can be set
+         */
+        @Override
+        public boolean canSetProperty(String propertyName) {
+            return switch (propertyName) {
+                case "model" -> false;
+                case "list" -> true;
+                default -> super.canSetProperty(propertyName);
+            };
+        }
+
+
+        /**
+         * Set the property from the specified value
+         *
+         * @param propertyName The property name
+         * @param value The value to set
+         */
+        @Override
+        public void setProperty(String propertyName, Object value) {
+            if ("list".equals(propertyName)) {
+                spinnerListModel.setList(getAs(value, List.class));
+            } else {
+                super.setProperty(propertyName, value);
+            }
+        }
+
+        /**
+         * Set our custom properties
+         * @param propertyName The property name
+         * @param externalState The external state {@link Accessor}
+         */
+        @Override
+        public void setFromAccessor(String propertyName, Accessor externalState) {
+            if ("list".equals(propertyName)) {
+                spinnerListModel.setList(getExternalState(externalState, List.class));
+            } else {
+                super.setFromAccessor(propertyName, externalState);
+            }
+        }
+
+        /**
+         * Get the allowable bindings for our custom properties
+         * @param propertyName The property name
+         * @return The allowable bindings
+         */
+        @Override
+        public AllowedBindings allowedBindings(String propertyName) {
+            return "list".equals(propertyName) ? AllowedBindings.FROM_MODEL : super.allowedBindings(propertyName);
+        }
+
+        /**
+         * Add special case processing for the value property
+         * @param propertyName The property name
+         * @param externalState The external state {@link Accessor}
+         * @param refreshTriggers The list of {@link RefreshTrigger} that trigger a refresh
+         *                        of the external state. The model will initiate these.
+         */
+        @Override
+        public void bindProperty(String propertyName, Accessor externalState, List<RefreshTrigger> refreshTriggers) {
+            super.bindProperty(propertyName, externalState, refreshTriggers);
+            if ("value".equals(propertyName) && externalState.isWriteable()) {
+                spinnerListModel.addChangeListener(evt -> {
+                    if (!spinnerListModel.getValue().equals(externalState.get())) {
+                        externalState.set(spinnerListModel.getValue());
+                    }
+                });
+            }
+        }
+
+
     }
 }

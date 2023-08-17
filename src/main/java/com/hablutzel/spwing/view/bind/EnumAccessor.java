@@ -15,23 +15,37 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.impl;
+package com.hablutzel.spwing.view.bind;
 
-
-import com.hablutzel.spwing.events.DocumentEventDispatcher;
-import com.hablutzel.spwing.events.DocumentEventInvoker;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationContext;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
+
 
 @RequiredArgsConstructor
-public class DocumentEventRefreshTrigger implements RefreshTrigger {
+@Slf4j
+@ToString
+public class EnumAccessor extends Accessor {
 
-    private final ApplicationContext applicationContext;
-    private final DocumentEventDispatcher documentEventDispatcher;
-    private final String trigger;
+    private final Class<?> enumClass;
 
     @Override
-    public void onRefresh(final Runnable runnable) {
-        documentEventDispatcher.registerListener(trigger, DocumentEventInvoker.from(applicationContext, runnable));
+    public boolean isWriteable() {
+        return false;
+    }
+
+    @Override
+    public Object get() {
+        return enumClass;
+    }
+
+    @Override
+    public void set(Object value) {
+        throw new UnsupportedOperationException("Cannot set an enum accessor" );
+    }
+
+    @Override
+    public boolean canSupply(Class<?> targetClass) {
+        return false;
     }
 }

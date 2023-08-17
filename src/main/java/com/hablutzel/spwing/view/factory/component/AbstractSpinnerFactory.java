@@ -18,10 +18,11 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JSpinnerEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.convert.ConversionService;
 
 import javax.swing.JSpinner;
-import javax.swing.SpinnerModel;
 
 /**
  * Create a new {@link JSpinner} instance, including registering an
@@ -33,9 +34,18 @@ import javax.swing.SpinnerModel;
 public abstract class AbstractSpinnerFactory extends AbstractViewComponentFactory<JSpinner> {
 
     @Override
-    public JSpinner build(final String name) {
-        return registerAdapter(new JSpinner(getModel()), name, JSpinnerEventAdapter::new);
+    public Cocoon<JSpinner> build(final String name, final ConversionService conversionService) {
+
+        Cocoon<JSpinner> cocoon = buildCocoon(conversionService);
+        registerAdapter(cocoon.getComponent(), name, JSpinnerEventAdapter::new);
+        return cocoon;
     }
 
-    protected abstract SpinnerModel getModel();
+    /**
+     * Build a cocoon for the specific spinner subclass
+     * @param conversionService  The {@link ConversionService}
+     * @return A {@link Cocoon} for the spinner
+     *
+     */
+    protected abstract Cocoon<JSpinner> buildCocoon(final ConversionService conversionService);
 }

@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.ContainerEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import java.awt.Container;
@@ -37,8 +39,10 @@ import java.awt.Container;
 public final class ContainerFactory extends AbstractViewComponentFactory<Container> {
 
     @Override
-    public Container build(final String name) {
-        return registerAdapter(new Container(), name, ContainerEventAdapter::new);
+    public Cocoon<Container> build(String name, ConversionService conversionService) {
+        Container container = new Container();
+        registerAdapter(container, name, ContainerEventAdapter::new);
+        return new Cocoon<>(container, this, conversionService);
     }
 
     @Override

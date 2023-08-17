@@ -17,17 +17,19 @@
 
 package com.hablutzel.spwing.view.factory.component;
 
-import com.hablutzel.spwing.view.adapter.JFrameEventAdapter;
+import com.hablutzel.spwing.view.adapter.JTextFieldEventAdapter;
 import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
+import com.hablutzel.spwing.view.factory.cocoon.JTextComponentCocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
-import javax.swing.JFrame;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
 
 /**
- * Create a new {@link JFrame} instance, including registering an
+ * Create a new {@link JTextField} instance, including registering an
  * event adapter for that instance with the current document event dispatcher.
  *
  * @author Bob Hablutzel
@@ -35,19 +37,18 @@ import javax.swing.JFrame;
 @Service
 @Scope("singleton")
 @Slf4j
-public final class JFrameFactory extends AbstractViewComponentFactory<JFrame> {
-
+public final class JPasswordTextFieldFactory extends AbstractViewComponentFactory<JPasswordField> {
 
     @Override
-    public Cocoon<JFrame> build(String name, ConversionService conversionService) {
-        JFrame frame = new JFrame();
-        registerAdapter(frame, name, JFrameEventAdapter::new);
-        return new Cocoon<>(frame, this, conversionService);
+    public Cocoon<JPasswordField> build(String name, ConversionService conversionService) {
+        JPasswordField passwordField = new JPasswordField();
+        registerAdapter(passwordField, name, JTextFieldEventAdapter::new);
+        return new JTextComponentCocoon<>(passwordField, this, conversionService);
     }
 
     @Override
     public String alias() {
-        return "JFrame";
+        return "JPasswordField";
     }
 
 }

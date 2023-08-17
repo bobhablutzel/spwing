@@ -18,7 +18,6 @@
 package com.hablutzel.spwing.view.bind;
 
 
-import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.context.ApplicationContext;
 import org.springframework.lang.NonNull;

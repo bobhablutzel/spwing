@@ -15,15 +15,18 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.impl;
+package com.hablutzel.spwing.view.factory;
 
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 
 
 @RequiredArgsConstructor
+@Slf4j
 public class PropertyListenerRefreshTrigger implements RefreshTrigger, PropertyChangeListener {
 
     private final String propertyName;

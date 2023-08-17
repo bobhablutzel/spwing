@@ -15,7 +15,7 @@
  *
  */
 
-package com.hablutzel.spwing.view.bind.impl;
+package com.hablutzel.spwing.view.bind;
 
 public interface RefreshTrigger {
 

@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JCheckBoxEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JCheckBox;
@@ -33,11 +35,13 @@ import javax.swing.JCheckBox;
 @Service
 @Scope("singleton")
 @Slf4j
-public final class JCheckBoxFactory extends AbstractViewComponentFactory<JCheckBox> {
+public final class JCheckBoxFactory extends AbstractButtonFactory<JCheckBox> {
 
     @Override
-    public JCheckBox build(final String name) {
-        return registerAdapter(new JCheckBox(), name, JCheckBoxEventAdapter::new);
+    public Cocoon<JCheckBox> build(String name, ConversionService conversionService) {
+        JCheckBox checkBox = new JCheckBox();
+        registerAdapter(checkBox, name, JCheckBoxEventAdapter::new);
+        return new AbstractButtonFactory.ButtonCocoon<>(checkBox, this, conversionService );
     }
 
     @Override

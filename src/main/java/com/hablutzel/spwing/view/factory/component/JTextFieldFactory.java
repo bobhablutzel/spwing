@@ -18,8 +18,11 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JTextFieldEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
+import com.hablutzel.spwing.view.factory.cocoon.JTextComponentCocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JTextField;
@@ -36,8 +39,10 @@ import javax.swing.JTextField;
 public final class JTextFieldFactory extends AbstractViewComponentFactory<JTextField> {
 
     @Override
-    public JTextField build(final String name) {
-        return registerAdapter(new JTextField(), name, JTextFieldEventAdapter::new);
+    public Cocoon<JTextField> build(String name, ConversionService conversionService) {
+        JTextField textField = new JTextField();
+        registerAdapter(textField, name, JTextFieldEventAdapter::new);
+        return new JTextComponentCocoon<>(textField, this, conversionService);
     }
 
     @Override

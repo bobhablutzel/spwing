@@ -16,6 +16,40 @@ The <i><u>ridiculously</u></i> easy cross-platform GUI framework
 ### Release Notes
 
 
+#### Version 0.6.2
+- Added support for formatted and password text fields.
+- Added support for bean references in SVWF files. Now you can assign a Swing component
+  to a bean value with the notation:
+```java
+        property = @beanName
+```
+
+  For example, creating a formatted text field with a format from one of the predefined
+  format beans looks like this:
+
+```java
+    label: JFormattedTextField( value => "person.birthday",
+                                format = @dateTimeFormat );
+
+```
+  Of course you can bind formats if you want to dynamically change them at runtime.
+
+  Predefined format beans include ```dateFormat```, ```timeFormat```, ```dateTimeFormat```, ```utcFormat```,
+  ```numberFormatPercent```, ```numberFormat```, ```numberFormatCurrency```, and ```numberFormatCompact```. You
+  can also define your own beans with custom formats from ```NumberFormat```, ```DateFormat```, or ```MaskFormat```.
+  See JFormattedTextFieldFactory.java for more details.
+- With this release predefined borders and colors are beans instead of internal constants. This simplifies
+  the handling while making it easier to add new colors or borders in your code. These can be referenced 
+  using the @bean notation - e.g:
+- 
+```java
+    label: JTextField( value => "person.birthday",
+                       border = @twoPixelWhiteLineBorder,
+                       background = @pink );
+
+```
+  See SVWFBorderFactory and SVWFColorFactory for details.
+
 #### Version 0.6.1
 - Binding has been simplified in two ways.
   - In SVWF files, model properties can be bound to Swing component properties 

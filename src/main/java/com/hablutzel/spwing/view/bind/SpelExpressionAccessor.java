@@ -41,6 +41,16 @@ public class SpelExpressionAccessor extends Accessor {
         return spelExpression.isWritable(evaluationContext);
     }
 
+
+    /**
+     * Routine to do a test retrieval of the object. This will
+     * throw if the expression isn't really valid, even if parsable
+     */
+    public SpelExpressionAccessor validate(final EvaluationContext evaluationContext) {
+        spelExpression.getValue(evaluationContext);
+        return this;
+    }
+
     @Override
     public Object get() {
         return spelExpression.getValue(evaluationContext);

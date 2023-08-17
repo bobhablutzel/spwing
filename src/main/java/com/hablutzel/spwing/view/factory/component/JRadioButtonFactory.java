@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JRadioButtonEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JRadioButton;
@@ -33,11 +35,14 @@ import javax.swing.JRadioButton;
 @Service
 @Scope("singleton")
 @Slf4j
-public final class JRadioButtonFactory extends AbstractViewComponentFactory<JRadioButton> {
+public final class JRadioButtonFactory extends AbstractButtonFactory<JRadioButton> {
+
 
     @Override
-    public JRadioButton build(final String name) {
-        return registerAdapter(new JRadioButton(), name, JRadioButtonEventAdapter::new);
+    public Cocoon<JRadioButton> build(String name, ConversionService conversionService) {
+        JRadioButton radioButton = new JRadioButton();
+        registerAdapter(radioButton, name, JRadioButtonEventAdapter::new);
+        return new AbstractButtonFactory.ButtonCocoon<>(radioButton, this, conversionService );
     }
 
     @Override

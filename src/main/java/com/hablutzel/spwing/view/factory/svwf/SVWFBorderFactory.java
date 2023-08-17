@@ -17,6 +17,8 @@
 
 package com.hablutzel.spwing.view.factory.svwf;
 
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Service;
 
 import javax.swing.border.EmptyBorder;
@@ -25,20 +27,60 @@ import java.awt.Color;
 
 
 @Service
-public class SVWFBorderFactory implements SVWFComponentFactory {
+@Scope("singleton")
+public class SVWFBorderFactory {
 
-    @Override
-    public void addComponents(final SVWFListener svwfListener) {
-        svwfListener.addComponent("onePixelBlackLineBorder", new LineBorder(Color.black, 1));
-        svwfListener.addComponent("twoPixelBlackLineBorder", new LineBorder(Color.black, 2));
-        svwfListener.addComponent("threePixelBlackLineBorder", new LineBorder(Color.black, 3));
-        svwfListener.addComponent("fourPixelBlackLineBorder", new LineBorder(Color.black, 4));
-        svwfListener.addComponent("onePixelWhiteLineBorder", new LineBorder(Color.white, 1));
-        svwfListener.addComponent("twoPixelWhiteLineBorder", new LineBorder(Color.white, 2));
-        svwfListener.addComponent("threePixelWhiteLineBorder", new LineBorder(Color.white, 3));
-        svwfListener.addComponent("fourPixelWhiteLineBorder", new LineBorder(Color.white, 4));
-        svwfListener.addComponent("onePixelEmptyBorder", new EmptyBorder(1, 1, 1, 1));
-        svwfListener.addComponent("fivePixelEmptyBorder", new EmptyBorder(5, 5, 5, 5));
-        svwfListener.addComponent("tenPixelEmptyBorder", new EmptyBorder(10, 10, 10, 10));
+    @Bean
+    public LineBorder onePixelBlackLineBorder() {
+        return new LineBorder(Color.black, 1 );
     }
+
+    @Bean
+    public LineBorder twoPixelBlackLineBorder() {
+        return new LineBorder(Color.black, 2 );
+    }
+
+    @Bean
+    public LineBorder threePixelBlackLineBorder() {
+        return new LineBorder(Color.black, 3 );
+    }
+
+
+    @Bean
+    public LineBorder fourPixelBlackLineBorder() {
+        return new LineBorder(Color.black, 4 );
+    }
+
+
+    @Bean
+    public LineBorder onePixelWhiteLineBorder() {
+        return new LineBorder(Color.white, 1 );
+    }
+
+    @Bean
+    public LineBorder twoPixelWhiteLineBorder() {
+        return new LineBorder(Color.white, 2 );
+    }
+
+    @Bean
+    public LineBorder threePixelWhiteLineBorder() {
+        return new LineBorder(Color.white, 3 );
+    }
+
+
+    @Bean
+    public LineBorder fourPixelWhiteLineBorder() {
+        return new LineBorder(Color.white, 4 );
+    }
+
+
+    @Bean
+    public EmptyBorder onePixelEmptyBorder() { return new EmptyBorder(1, 1, 1, 1 ); }
+
+    @Bean
+    public EmptyBorder fivePixelEmptyBorder() { return new EmptyBorder(5, 5, 5, 5 ); }
+
+    @Bean
+    public EmptyBorder tenPixelEmptyBorder() { return new EmptyBorder(10, 0, 10, 10 ); }
+
 }

@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JLabel;
@@ -35,9 +37,12 @@ import javax.swing.JLabel;
 @Slf4j
 public final class JLabelFactory extends AbstractViewComponentFactory<JLabel> {
 
+
     @Override
-    public JLabel build(final String name) {
-        return registerAdapter(new JLabel(), name, JLabelEventAdapter::new);
+    public Cocoon<JLabel> build(String name, ConversionService conversionService) {
+        JLabel label = new JLabel();
+        registerAdapter(label, name, JLabelEventAdapter::new);
+        return new Cocoon<>(label, this, conversionService );
     }
 
     @Override

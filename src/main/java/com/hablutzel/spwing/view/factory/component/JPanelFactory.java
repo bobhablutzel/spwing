@@ -18,8 +18,10 @@
 package com.hablutzel.spwing.view.factory.component;
 
 import com.hablutzel.spwing.view.adapter.JPanelEventAdapter;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Scope;
+import org.springframework.core.convert.ConversionService;
 import org.springframework.stereotype.Service;
 
 import javax.swing.JPanel;
@@ -36,9 +38,12 @@ import javax.swing.JPanel;
 public final class JPanelFactory extends AbstractViewComponentFactory<JPanel> {
 
     @Override
-    public JPanel build(final String name) {
-        return registerAdapter(new JPanel(), name, JPanelEventAdapter::new);
+    public Cocoon<JPanel> build(String name, ConversionService conversionService) {
+        JPanel panel = new JPanel();
+        registerAdapter(panel, name, JPanelEventAdapter::new);
+        return new Cocoon<>(panel, this, conversionService);
     }
+
 
     @Override
     public String alias() {

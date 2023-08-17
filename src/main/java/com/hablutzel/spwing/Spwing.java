@@ -60,7 +60,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.support.ConversionServiceFactoryBean;
 import org.springframework.context.support.ResourceBundleMessageSource;
@@ -262,6 +261,7 @@ public class Spwing implements ApplicationContextAware  {
         // once we are able to create it (we have to create it after the application context).
         DefaultListableBeanFactory parentBeanFactory = new DefaultListableBeanFactory();
         parentBeanFactory.registerSingleton("messageSource", registeredMessageSource);
+        parentBeanFactory.registerSingleton("conversionService",getConversionService(contextRoot) );
 
         // Build the application context. We also need to create a new document scope manager
         // which will handle the "document" scope. This scope creates the equivalent of
@@ -471,7 +471,9 @@ public class Spwing implements ApplicationContextAware  {
 
         // Perform general property setting to adopt the MacOS look & feel
         System.setProperty("apple.laf.useScreenMenuBar", "true");
-        System.setProperty("apple.awt.application.name", applicationName);
+        if (null != applicationName) {
+            System.setProperty("apple.awt.application.name", applicationName);
+        }
         System.setProperty("apple.awt.application.appearance", "system");
 
     }
@@ -614,8 +616,7 @@ public class Spwing implements ApplicationContextAware  {
      * the conversion service that includes that specialized conversion classses.
      * @return A new {@link ConversionService} with specialized converters
      */
-    @Bean
-    ConversionService conversionService() {
+    private static ConversionService getConversionService(final Class<?> contextRoot) {
         ConversionServiceFactoryBean factory = new ConversionServiceFactoryBean();
         Set<Converter<?, ?>> convSet = new HashSet<>();
         convSet.add(new StringToFontConverter());
@@ -711,7 +712,7 @@ public class Spwing implements ApplicationContextAware  {
                 return result;
             }
         } else {
-            log.warn( "No handler for {}", command );
+            log.debug( "No handler for {}", command );
             log.debug( "Known commands: {}", null == activeCommandMethodsMap ? "null" : activeCommandMethodsMap.keySet() );
         }
         return defaultValue;

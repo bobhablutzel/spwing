@@ -20,6 +20,7 @@ package com.hablutzel.spwing.view.bind.impl;
 import com.hablutzel.spwing.util.EnumerationStream;
 import com.hablutzel.spwing.view.bind.Accessor;
 import com.hablutzel.spwing.view.bind.Binder;
+import com.hablutzel.spwing.view.bind.RefreshTrigger;
 import com.hablutzel.spwing.view.bind.controllers.ButtonGroupController;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanWrapper;
@@ -28,7 +29,8 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
-import javax.swing.*;
+import javax.swing.AbstractButton;
+import javax.swing.ButtonGroup;
 import java.awt.event.ItemListener;
 import java.util.List;
 import java.util.Map;

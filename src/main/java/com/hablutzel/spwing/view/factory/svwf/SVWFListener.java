@@ -24,13 +24,14 @@ import com.hablutzel.spwing.constants.ContextualConstant;
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 import com.hablutzel.spwing.invoke.ParameterResolution;
 import com.hablutzel.spwing.invoke.ReflectiveInvoker;
+import com.hablutzel.spwing.model.PropertyChangeModel;
 import com.hablutzel.spwing.util.ANTLRUtils;
+import com.hablutzel.spwing.util.FlexpressionParser;
 import com.hablutzel.spwing.util.PlatformResourceUtils;
 import com.hablutzel.spwing.view.adapter.JLabelEventAdapter;
-import com.hablutzel.spwing.view.bind.Accessor;
-import com.hablutzel.spwing.view.bind.PropertyAccessor;
-import com.hablutzel.spwing.view.bind.ViewPropertyBinder;
-import com.hablutzel.spwing.view.bind.impl.RefreshTrigger;
+import com.hablutzel.spwing.view.bind.*;
+import com.hablutzel.spwing.view.factory.PropertyListenerRefreshTrigger;
+import com.hablutzel.spwing.view.factory.cocoon.Cocoon;
 import com.hablutzel.spwing.view.factory.component.ViewComponentFactory;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -38,20 +39,32 @@ import lombok.extern.slf4j.Slf4j;
 import org.antlr.v4.runtime.Token;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.convert.ConversionService;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ParseException;
+import org.springframework.expression.spel.SpelEvaluationException;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.lang.Nullable;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyDescriptor;
+import java.beans.PropertyEditor;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.net.URL;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -89,6 +102,12 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * Map of the components that this listener knows about
      */
     private final Map<String, Object> knownComponents = new HashMap<>();
+
+
+    private final Map<String, Cocoon<?>> knownCocoons = new HashMap<>();
+
+
+    private final Map<Object,BeanWrapper> beanWrapperFor = new HashMap<>();
 
     /**
      * Defined default values
@@ -135,8 +154,6 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         applicationContext.getBeansOfType(ViewComponentFactory.class)
                 .values()
                 .forEach(factoryBean -> viewComponentFactoryMap.put(factoryBean.alias(), factoryBean));
-
-        log.info( "known view factories: {} ", viewComponentFactoryMap );
 
         // Define known components - known colors, fonts, etc.
         Collection<SVWFComponentFactory> factoryBeans = applicationContext.getBeansOfType(SVWFComponentFactory.class).values();
@@ -218,13 +235,16 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         String identifier = ctx.target.getText();
         String property = ctx.property.getText();
 
-        // See if we know this identifier and make sure it's a Swing component
-        Object viewObject = knownComponents.get(identifier);
-        if (viewObject instanceof Component component) {
+        // See if we have a cocoon to use for binding
+        if (knownCocoons.containsKey(identifier)) {
 
-            // Attempt to bind the property. We bind even if the parse is already
-            // invalid, but update based on the new parse.
-            cleanParse = viewPropertyBinder.bind( component, property, accessor, triggers) && cleanParse;
+            Cocoon<?> cocoon = knownCocoons.get(identifier);
+            if (cocoon.allowedBindings(property) != Cocoon.AllowedBindings.NONE) {
+                cocoon.bindProperty(property, accessor, triggers);
+            } else {
+                log.error("Component property {} cannot be bound", property);
+                cleanParse = false;
+            }
         } else {
             log.error("Component {} not found, or ineligible for binding", identifier);
             cleanParse = false;
@@ -237,12 +257,13 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * string elements, getting the element token, and stripping the
      * quotes from that token text. This will return an empty list of
      * the clause was omitted.
-     * @param ctx The contextx
+     * @param ctx The context
      * @return The (possibly empty) list of triggers.
      */
-    private List<String> getTriggers(SpwingViewFileParser.TriggerClauseContext ctx) {
+    private List<String> getTriggeringProperties(final String targetProperty,
+                                                 final SpwingViewFileParser.TriggerClauseContext ctx) {
         if (null == ctx) {
-            return List.of();
+            return null == targetProperty ? List.of() : List.of(targetProperty);
         } else {
             return ctx.stringElement().stream()
                     .map(stringElementContext -> stringElementContext.element)
@@ -322,25 +343,125 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // the expression, and the potential triggers
         Object rootObject = getRootClauseObject(ctx.rootClause());
         String expression = ANTLRUtils.stripStringLiteral(ctx.expression);
-        Accessor accessor = viewPropertyBinder.toAccessor(rootObject, expression);
+        Accessor accessor = toAccessor(rootObject, expression);
+        String defaultTrigger = accessor instanceof PropertyAccessor ? expression : null;
 
-        List<String> triggers = getTriggers(ctx.triggerClause());
-        List<RefreshTrigger> refreshTriggers = viewPropertyBinder
-                .getRefreshTriggers(applicationContext, rootObject, expression, triggers);
+        List<String> triggers = getTriggeringProperties(defaultTrigger, ctx.triggerClause());
+        List<RefreshTrigger> refreshTriggers = convertPropertyNamesIntoRefreshTriggers(rootObject, triggers);
 
-        // Get the property accessor for this element
-        if (null != accessor) {
-
-            // See if we have a group or single binding statement
-            if (null != ctx.target.single) {
-                bindSingleObject(ctx.target.single, accessor, refreshTriggers);
-            } else {
-                bindGroup(ctx.target.group, accessor, refreshTriggers);
-            }
+        // See if we have a group or single binding statement
+        if (null != ctx.target.single) {
+            bindSingleObject(ctx.target.single, accessor, refreshTriggers);
         } else {
-            this.cleanParse = false;
+            bindGroup(ctx.target.group, accessor, refreshTriggers);
+        }
+    }
+
+
+    private List<RefreshTrigger> convertPropertyNamesIntoRefreshTriggers(final Object targetObject,
+                                                                         final List<String> propertyNames ) {
+
+        // Add the refresh triggers required
+        Consumer<PropertyChangeListener> addListenerFunc = getAddChangeListener(targetObject);
+        if (null != addListenerFunc) {
+            final List<RefreshTrigger> resultingTriggers = new ArrayList<>();
+            propertyNames.forEach( propertyTrigger -> {
+                PropertyListenerRefreshTrigger refreshTrigger = buildRefreshTrigger(targetObject, propertyTrigger);
+                addListenerFunc.accept(refreshTrigger);
+                resultingTriggers.add(refreshTrigger);
+            });
+            return resultingTriggers;
+        } else {
+            return List.of();
+        }
+    }
+
+    /**
+     * Build a {@link PropertyListenerRefreshTrigger} for the object and property.
+     * This will also add a property listener, if needed, to the
+     * leaf node property so that the leaf node signalling a change will be
+     * propagated to the target object.
+     *
+     * @param targetObject The target object
+     * @param propertyName The property name (or expression)
+     * @return A {@link PropertyListenerRefreshTrigger} instance
+     */
+    private PropertyListenerRefreshTrigger buildRefreshTrigger( final Object targetObject,
+                                                                final String propertyName ) {
+
+        final BeanWrapper beanWrapper = beanWrapperFor.computeIfAbsent(targetObject, BeanWrapperImpl::new);
+        final PropertyDescriptor propertyDescriptor = beanWrapper.getPropertyDescriptor(propertyName);
+
+        // There are two potential cases here. First, the property could be a simple
+        // property on the target object. In this case, we can just build a property
+        // listener and use that. However, in some cases the property name passed in
+        // is actually a property expression, and therefore the leaf property name
+        // and the expression will differ. In this case, we need to add a bridge listener
+        final String leafName = propertyDescriptor.getName();
+        final PropertyListenerRefreshTrigger result = new PropertyListenerRefreshTrigger(propertyName);
+        if (!propertyName.equals(leafName)) {
+
+            // This is the case where the property name is a property path, so we can
+            // listen to changes on the parent. We chop off the end of the property
+            // path in order to get the property path that references the parent
+            final String parentPath = propertyName.substring(0, propertyName.length() - leafName.length() - 1 );
+
+            final Object parentObject = beanWrapper.getPropertyValue(parentPath);
+            if (null != parentObject) {
+                Consumer<PropertyChangeListener> addParentListener = getAddChangeListener(parentObject);
+                if (null != addParentListener) {
+                    addParentListener.accept(evt -> {
+                        if (evt.getPropertyName().equals(leafName)) {
+                            result.propertyChange(new PropertyChangeEvent(parentObject, propertyName, evt.getOldValue(), evt.getNewValue()));
+                        }
+                    });
+                } else {
+                    log.error("Parent property defined by {} does not emit property events", parentPath);
+                }
+            } else {
+                log.error( "Could not resolve parent property {}", parentPath );
+            }
         }
 
+        return result;
+
+
+    }
+
+
+    /**
+     * Get the function that adds a property change listener to an object.
+     *
+     * @param targetObject The target object
+     * @return A (potentially null) {@link Consumer<PropertyChangeListener>}
+     */
+    private Consumer<PropertyChangeListener> getAddChangeListener(final Object targetObject ) {
+        if (targetObject instanceof PropertyEditor propertyEditor) {
+            return propertyEditor::addPropertyChangeListener;
+        } else if (targetObject instanceof PropertyChangeModel propertyChangeModel) {
+            return propertyChangeModel::addPropertyChangeListener;
+        } else {
+            // Reflective approach
+            Optional<Method> optionalAddListenerMethod = Arrays.stream(targetObject.getClass().getMethods())
+                    .filter(method -> !Modifier.isStatic(method.getModifiers()) &&
+                            !Modifier.isAbstract(method.getModifiers()) &&
+                            method.getName().equals("addPropertyChangeListener") &&
+                            method.getParameters().length == 1 &&
+                            method.getParameters()[0].getType().equals(PropertyChangeListener.class))
+                    .findFirst();
+            if (optionalAddListenerMethod.isPresent()) {
+                final Method addListenerMethod = optionalAddListenerMethod.get();
+                return propertyChangeListener -> {
+                    try {
+                        addListenerMethod.invoke(targetObject, propertyChangeListener);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        log.warn("Method {} of {} could not be invoked, no refresh trigger. ",
+                                addListenerMethod.getName(), targetObject.getClass().getName());
+                    }
+                };
+            }
+        }
+        return null;
     }
 
 
@@ -358,7 +479,10 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             // For each defined default, remember the values
             ctx.fixedOnlyKVPair().forEach(kvPairContext -> {
                 final String propertyName = kvPairContext.k.getText();
-                defaultMap.put(propertyName, getDeclaredValue(kvPairContext.fixedValue().v));
+                final Object declaredValue = getDeclaredValue(kvPairContext.fixedValue().v);
+                if (null != declaredValue) {
+                    defaultMap.put(propertyName, declaredValue);
+                }
             });
         }
     }
@@ -467,7 +591,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // If we already have a component with this name, we ignore this
         // definition.
         if (knownComponents.containsKey(componentName)) {
-            log.warn("In SWVF file, {} is already defined. Additional definition ignored", componentName);
+            log.warn("In SVWF file, {} is already defined. Additional definition ignored", componentName);
         } else {
 
             // Get the definition of the element based on the alias. This will give
@@ -476,29 +600,25 @@ public class SVWFListener extends SpwingViewFileBaseListener {
             if (null != viewComponentFactory) {
 
                 // We have the alias, create the instance and get a class for what we just defined.
-                final Object createdElement = viewComponentFactory.build(componentName);
+                final Cocoon<?> cocoon = viewComponentFactory.build(componentName, conversionService);
 
                 // Add this new component to the list
-                knownComponents.put(componentName, createdElement);
+                knownComponents.put(componentName, cocoon.getComponent());
+                knownCocoons.put(componentName, cocoon );
 
                 // Set the initial "value" of the component to the name. This can be
                 // changed by specifying a "value" property, which will be intercepted and
                 // interpreted as a new value
-                viewPropertyBinder.setValue(createdElement, componentName);
-
-                // In order to set properties of this component, we create a bean
-                // wrapper and set the conversion service
-                BeanWrapper activeComponent = viewPropertyBinder.beanWrapperFor(createdElement);
-                activeComponent.setConversionService(conversionService);
+                cocoon.setProperty("name", componentName);
 
                 // Apply defaults for any class that is in the target class hierarchy
                 Map<String,Object> defaultValuesForComponent = defaultValues.get(componentName);
                 if (null != defaultValuesForComponent) {
-                    defaultValuesForComponent.forEach(activeComponent::setPropertyValue);
+                    defaultValuesForComponent.forEach(cocoon::setProperty);
                 }
 
                 // Walk through all the key/value pairs for this component.
-                ctx.kvPair().forEach(kvPairContext -> handleKVPairForComponent(createdElement, kvPairContext));
+                ctx.kvPair().forEach(kvPairContext -> handleKVPairForComponent(cocoon, kvPairContext));
             } else {
                 log.error("Cannot create {}, no such class or class is abstract", classAlias);
                 cleanParse = false;
@@ -510,19 +630,19 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     /**
      * Called to handle a single key/value pair when creating a component.
      *
-     * @param createdElement The component being created
+     * @param cocoon The component cocoon
      * @param kvPairContext The KV pair to process
      */
-    private void handleKVPairForComponent(final Object createdElement,
+    private void handleKVPairForComponent(final Cocoon<?> cocoon,
                                           final SpwingViewFileParser.KvPairContext kvPairContext) {
 
         // Get the property name and declared value.
         final String propertyName = kvPairContext.k.getText();
         if (null != kvPairContext.fixedValue()) {
             // It's a fixed value. Handle it as such
-            handleFixedComponentValue(createdElement, propertyName, kvPairContext.fixedValue());
+            handleFixedComponentValue(cocoon, propertyName, kvPairContext.fixedValue());
         } else {
-            handleBoundComponentValue(createdElement, propertyName, kvPairContext.boundValue());
+            handleBoundComponentValue(cocoon, propertyName, kvPairContext.boundValue());
         }
     }
 
@@ -531,11 +651,11 @@ public class SVWFListener extends SpwingViewFileBaseListener {
      * Handles inline bindings (the '=>' operator inside a component
      * definition). This creates a binding between the Swing value and
      * the model property value.
-     * @param createdElement The Swing component
+     * @param cocoon The component cocoon
      * @param propertyName The Swing component property being bound
      * @param boundValueContext The parser context
      */
-    private void handleBoundComponentValue(final Object createdElement,
+    private void handleBoundComponentValue(final Cocoon<?> cocoon,
                                            final String propertyName,
                                            final SpwingViewFileParser.BoundValueContext boundValueContext )
     {
@@ -545,51 +665,110 @@ public class SVWFListener extends SpwingViewFileBaseListener {
         // reference the model object. For more complex bindings - groups,
         // other objects, etc. - use the 'bind' statement
         String expression = ANTLRUtils.stripStringLiteral(boundValueContext.e);
-        Accessor accessor = viewPropertyBinder.toAccessor(modelObject, expression);
+        Accessor externalState = toAccessor(modelObject, expression);
 
-        if (accessor instanceof PropertyAccessor) {
-            final List<RefreshTrigger> refreshTriggers = viewPropertyBinder.getRefreshTriggers(applicationContext, modelObject, expression, List.of());
-            viewPropertyBinder.bind(createdElement, propertyName, accessor, refreshTriggers);
-        } else {
-            log.error( "{} is not a valid model property", expression);
+        final Cocoon.AllowedBindings allowedBindings = cocoon.allowedBindings(propertyName);
+        if (externalState instanceof PropertyAccessor && allowedBindings != Cocoon.AllowedBindings.NONE) {
+            final List<RefreshTrigger> refreshTriggers = convertPropertyNamesIntoRefreshTriggers(modelObject, List.of(expression));
+            cocoon.bindProperty(propertyName, externalState, refreshTriggers);
+        } else if (!externalState.isWriteable() && (allowedBindings == Cocoon.AllowedBindings.BIDIRECTIONAL || allowedBindings == Cocoon.AllowedBindings.FROM_COMPONENT)) {
+            log.error( "Cannot bind {} to {}", expression, propertyName);
             cleanParse = false;
+        } else {
+            cocoon.bindProperty(propertyName, externalState, List.of());
         }
     }
 
 
-    private void handleFixedComponentValue(final Object createdElement,
+
+    /**
+     * Takes the given expression (a property path, SPEL expression, literal, etc.)
+     * and turns it into an {@link Accessor}. The expression will first be evaluated
+     * as a property path on the supplied bean. If it is a readable property, then
+     * a {@link PropertyAccessor} will be created. If not, the expression will be
+     * evaluated to see if it can be handled by a {@link FlexpressionParser}
+     * (which can include system properties, SPEL expression, static method calls,
+     * arbitrary beans, and more). In this case, a {@link FlexpressionAccessor}
+     * will be created. If it is neither a property path nor a Flexpression,
+     * it will be taken as a literal.
+     *
+     * @param targetObject The object to act as a property source for property paths
+     * @param valueExpression The expression
+     * @return A new accessor
+     */
+
+    private Accessor toAccessor(@Nullable final Object targetObject, final String valueExpression) {
+
+        // First preference: A property, as this will allow read/write
+        if (null != targetObject) {
+            BeanWrapper targetBeanWrapper = beanWrapperFor.computeIfAbsent(targetObject, BeanWrapperImpl::new);
+            if (targetBeanWrapper.isReadableProperty(valueExpression)) {
+                return new PropertyAccessor(targetBeanWrapper, valueExpression, conversionService);
+            }
+
+            // Try a enum in the same package
+            try {
+                String packageName = targetObject.getClass().getPackageName();
+                String potentialEnumName = String.format( "%s.%s", packageName, valueExpression );
+                log.info( "Trying {}", potentialEnumName);
+                Class<?> enumClass = Class.forName(potentialEnumName);
+                if (enumClass.isEnum()) {
+                    return new EnumAccessor(enumClass);
+                }
+            } catch (ClassNotFoundException e) {
+                log.debug( "Test for enum failed, moving on" );
+            }
+
+            // If not a property, could it be an enum?
+            try {
+                Class<?> targetClass = targetObject.getClass();
+                String potentialEnumName = String.format( "%s$%s", targetClass.getCanonicalName(), valueExpression );
+                log.info( "Trying {}", potentialEnumName);
+                Class<?> enumClass = Class.forName(potentialEnumName);
+                if (enumClass.isEnum()) {
+                    return new EnumAccessor(enumClass);
+                }
+            } catch (ClassNotFoundException e) {
+                log.debug( "Test for enum failed, moving on" );
+            }
+
+        }
+
+        // Not a property, try a SPEL expression. Allows more flexibility than a property
+        // but isn't writeable
+        try {
+            SpelExpressionParser parser = new SpelExpressionParser();
+            Expression spelExpression = parser.parseExpression(valueExpression);
+            StandardEvaluationContext context = new StandardEvaluationContext(targetObject);
+            SpelExpressionAccessor spelExpressionAccessor = new SpelExpressionAccessor(spelExpression, context, conversionService);
+            // Make sure it can be accessed ... this will throw if not
+            return spelExpressionAccessor.validate(context);
+        } catch (ParseException | SpelEvaluationException e) {
+            log.debug( "Unable to treat {} as an expression", valueExpression, e);
+        }
+
+        // Next try is a flexpression, which can be used to pull in application properties
+        if (FlexpressionParser.appearsToBeFlexpression(valueExpression)) {
+            return new FlexpressionAccessor(valueExpression, applicationContext, conversionService);
+        }
+
+        // Last chance, a literal
+        return  new LiteralAccessor(valueExpression, conversionService);
+    }
+
+
+
+    private void handleFixedComponentValue(final Cocoon<?> cocoon,
                                            final String propertyName,
                                            final SpwingViewFileParser.FixedValueContext fixedValueContext  )
     {
-
         // Get the declared value
         final Object declaredValue = getDeclaredValue(fixedValueContext.v);
-
-        // Special case the "value" property - we track that internally.
-        // TODO special case CSS stylesheet and style clauses
-        if ("value".equals(propertyName)) {
-            viewPropertyBinder.setValue(createdElement, declaredValue);
-        } else {
-
-            final BeanWrapper beanWrapper = viewPropertyBinder.beanWrapperFor(createdElement);
-
-            // Get the property type for this component, based on the name given
-            final Class<?> propertyType = beanWrapper.getPropertyType(propertyName);
-            if (null != propertyType) {
-
-                // Push the value to the component.
-                if (declaredValue instanceof ContextualConstant contextualConstant) {
-                    final Object constantValue = contextualConstant.get(ConstantContext.SwingConstants);
-                    beanWrapper.setPropertyValue(propertyName, conversionService.convert(constantValue, propertyType));
-                } else {
-                    beanWrapper.setPropertyValue(propertyName, conversionService.convert(declaredValue, propertyType));
-                }
-            } else {
-
-                // Bad property name given. Kill the parse.
-                log.error("Unable to set property {} of unknown type", propertyName);
-                cleanParse = false;
-            }
+        if (declaredValue instanceof ContextualConstant contextualConstant) {
+            final Object constantValue = contextualConstant.get(ConstantContext.SwingConstants);
+            cocoon.setFromAccessor(propertyName, new LiteralAccessor(constantValue, conversionService) );
+        } else if (null != declaredValue) {
+            cocoon.setFromAccessor(propertyName, new LiteralAccessor(declaredValue, conversionService));
         }
     }
 
@@ -597,7 +776,7 @@ public class SVWFListener extends SpwingViewFileBaseListener {
     /**
      * Get the declared value for a fixed value declaration. Fixed values are
      * denoted by being specified by the "=" operator (not the "=>" operator)
-     * and can be determined at the time the SVWF file is parsed. This are
+     * and can be determined at the time the SVWF file is parsed. This is
      * required for default values and available for component values.
      *
      * @param valueContext The {@link com.hablutzel.spwing.view.factory.svwf.SpwingViewFileParser.PairValueContext}
@@ -617,6 +796,15 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                     ANTLRUtils.getIntValue(valueContext.in.bottom), ANTLRUtils.getIntValue(valueContext.in.right));
         } else if (null != valueContext.id) {
             return knownComponents.get(valueContext.id.getText());
+        } else if (null != valueContext.bean) {
+            String beanID = valueContext.bean.getText();
+            try {
+                return applicationContext.getBean(beanID);
+            } catch (BeansException e) {
+                log.error("Bean {} was not found in the context", beanID );
+                cleanParse = false;
+                return null;
+            }
         } else {
 
             // We know it has to be an integer; it can't be anything else or the parse would fail.
@@ -736,23 +924,25 @@ public class SVWFListener extends SpwingViewFileBaseListener {
                         String propertyName = kvPair.k.getText();
 
                         Object unconvertedValue = getDeclaredValue(kvPair.fixedValue().v);
-                        if (unconvertedValue instanceof ContextualConstant contextualConstant) {
-                            unconvertedValue = contextualConstant.get(ConstantContext.GridBagConstants);
-                        }
+                        if (null != unconvertedValue) {
+                            if (unconvertedValue instanceof ContextualConstant contextualConstant) {
+                                unconvertedValue = contextualConstant.get(ConstantContext.GridBagConstants);
+                            }
 
-                        switch (propertyName) {
-                            case "gridx" -> gridBagConstraints.gridx = doConvert(unconvertedValue, Integer.class, 0);
-                            case "gridy" -> gridBagConstraints.gridy = doConvert(unconvertedValue, Integer.class, 0);
-                            case "weightx" -> gridBagConstraints.weightx = doConvert(unconvertedValue, Float.class, 0.0f);
-                            case "weighty" -> gridBagConstraints.weighty = doConvert(unconvertedValue, Float.class, 0.0f);
-                            case "gridwidth" -> gridBagConstraints.gridwidth = doConvert(unconvertedValue, Integer.class, 0);
-                            case "gridheight" -> gridBagConstraints.gridheight = doConvert(unconvertedValue, Integer.class, 0);
-                            case "fill" -> gridBagConstraints.fill = doConvert(unconvertedValue, Integer.class, 0);
-                            case "anchor" -> gridBagConstraints.anchor = doConvert(unconvertedValue, Integer.class, 0);
-                            case "ipadx" -> gridBagConstraints.ipadx = doConvert(unconvertedValue, Integer.class, 0);
-                            case "ipady" -> gridBagConstraints.ipady = doConvert(unconvertedValue, Integer.class, 0);
-                            case "insets" -> gridBagConstraints.insets = doConvert(unconvertedValue, Insets.class, new Insets(0, 0, 0, 0));
-                            default -> log.warn("Ignored unknown modifier {}", propertyName);
+                            switch (propertyName) {
+                                case "gridx" -> gridBagConstraints.gridx = doConvert(unconvertedValue, Integer.class, 0);
+                                case "gridy" -> gridBagConstraints.gridy = doConvert(unconvertedValue, Integer.class, 0);
+                                case "weightx" -> gridBagConstraints.weightx = doConvert(unconvertedValue, Float.class, 0.0f);
+                                case "weighty" -> gridBagConstraints.weighty = doConvert(unconvertedValue, Float.class, 0.0f);
+                                case "gridwidth" -> gridBagConstraints.gridwidth = doConvert(unconvertedValue, Integer.class, 0);
+                                case "gridheight" -> gridBagConstraints.gridheight = doConvert(unconvertedValue, Integer.class, 0);
+                                case "fill" -> gridBagConstraints.fill = doConvert(unconvertedValue, Integer.class, 0);
+                                case "anchor" -> gridBagConstraints.anchor = doConvert(unconvertedValue, Integer.class, 0);
+                                case "ipadx" -> gridBagConstraints.ipadx = doConvert(unconvertedValue, Integer.class, 0);
+                                case "ipady" -> gridBagConstraints.ipady = doConvert(unconvertedValue, Integer.class, 0);
+                                case "insets" -> gridBagConstraints.insets = doConvert(unconvertedValue, Insets.class, new Insets(0, 0, 0, 0));
+                                default -> log.warn("Ignored unknown modifier {}", propertyName);
+                            }
                         }
                     });
                 }

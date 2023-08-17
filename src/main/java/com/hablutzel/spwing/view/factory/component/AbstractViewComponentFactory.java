@@ -54,10 +54,11 @@ public abstract class AbstractViewComponentFactory<T extends Component> implemen
      * @param createAdapter A creation function, taking an component and a {@link Spwing} component and returning
      *                      an {@link EventAdapter}
      */
-    protected T registerAdapter(@NonNull final T component,
+    protected void registerAdapter(@NonNull final T component,
                                    @NonNull final String name,
                                    @NonNull final BiFunction<T, Spwing, EventAdapter> createAdapter ) {
 
+        // Make sure the name is valid
         if (name.isBlank()) {
             log.error("Ignoring an attempt to register a component with a blank name" );
         } else {
@@ -67,11 +68,10 @@ public abstract class AbstractViewComponentFactory<T extends Component> implemen
 
             // Get the Spwing bean, and from there the current document event dispatcher
             final Spwing spwing = applicationContext.getBean(Spwing.class);
-            DocumentEventDispatcher documentEventDispatcher = spwing.getDocumentScopeManager().getDocumentEventDispatcher();
+            DocumentEventDispatcher dispatcher = spwing.getDocumentScopeManager().getDocumentEventDispatcher();
 
             // Get the event adapter for this object
-            documentEventDispatcher.registerEventAdapter(name, createAdapter.apply(component, spwing));
+            dispatcher.registerEventAdapter(name, createAdapter.apply(component, spwing));
         }
-        return component;
     }
 }
