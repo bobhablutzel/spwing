@@ -26,6 +26,7 @@ notice. However, the basic functionality works.
 - Automatic multi-document support
 - Annotation support for configuration
 - Automatic integration for native look & feel
+- Full undo/redo handling linked to the file save state
 - Automatic support for saving and opening files
 - Automatic platform-specific resource resolution
   - Sensitive to platform and version
@@ -335,18 +336,8 @@ convention of ending with "Model", the model class name itself will also be used
  */
 components {
     frame: JFrame(preferredSize=(400, 200));
-    label: JLabel(horizontalAlignment=$CENTER); // Note the use of SwingConstants.CENTER
+    label: JLabel( text => "textField"); // Binds to the model property "textField".
     button: JButton(text="Click me");
-}
-
-// Bind the label to the text field. This is on the model by
-// default but we can specify other beans instead.
-// Since we want the text to automatically update when the
-// text changes, the model uses a PropertyChangeListener and
-// signals changes to "textField" when the value changes in the model
-// The Spwing framework automatically handles signal cycles.
-bind {
-    label.text => "textField";
 }
 
 // Layout the frame, with the label in the center and the button at the bottom
@@ -364,11 +355,13 @@ as the ```horizontalAlignment``` property demonstrates Spwing defines some const
 The view definition language also allows for the setting of defaults by component type, 
 defining custom colors, font, etc.
 
-The ```bind``` clause ties a view element to a model element. This binding is generally
-bidirectional. If the model supports PropertyChangeListeners, the bidirectional binding is 
-automatic. If not, you can implement custom event binding. In this example, the text field 
-```label``` is bound to the model property ```textField``` such that if the text field on
-the model changes, the label will automatically change as well.
+This demo uses inline binding - the text of the label is associated with the model property
+```textField```. Any changes to the model property will automatically be reflected in the label.
+Since Labels are not editable, this is a unidirectional binding, but Spwing supports bidirectional
+for any Swing components whose values can change. Spwing also supports property hierarchies 
+("person.name" is a valid bidirectional binding). In more advanced use cases, Spwing can 
+bind to expressions ("person.name.toLowerCase() + ':' + thing"), and can bind groups of components
+(such as a set of radio buttons) to a single value.
 
 The button component defines a push button control. The logic for the button control is 
 handled in the controller, discussed below.
@@ -503,7 +496,7 @@ This is a maven project, so it has a pom.xml file:
         <dependency>
             <groupId>com.hablutzel.spwing</groupId>
             <artifactId>spwing</artifactId>
-            <version>0.6.0</version>
+            <version>0.6.2</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -550,52 +543,100 @@ the type of the parameter, that bean will be used.
 
 ## Bindings
 
-When views are created, the elements can be *bound* to a model or controller field.
+When views are created, the properties of the view elements can be *bound* to a model or controller field.
 When bound, changes to the view are automatically pushed to the bound field. This 
 ensures that the field always has the same value as the field.
 
-In order to make the binding bidirectional, the field needs to emit an event when the
+In order to make the binding bidirectional, the field needs to emit a property change event when the
 field is updated. The view element will automatically listen to this event (called a trigger)
 and update as required. The framework automatically deals with cyclic updates, so the 
-model is free to signal the event even if the view is the source of the change.
+model is free to signal the event even if the view is the source of the change. The model classes
+need to accept PropertyChangeListener instances. They can do this by subclassing the PropertyModel
+Spwing class, or just by having a public non-static method "addChangeListener" that accepts
+a ```PropertyChangeListener```. 
+
+Each model class signals changes for it's own fields. For simple classes, the trigger name is
+the same as the name of the field. For more complex hierarchies, the trigger name is the property
+path to the bound field: ```person.name```. Spwing will automatically bridge between the signalled 
+property in the person class (```name```) and the binding trigger (```person.name```).
 
 While the displayed value of the view is usually bound, any field of the view that 
 follows Java Bean semantics can be bound. This makes it trivial to enable/disable
 buttons, or do exotic things like changing the font color of a label based on model state.
 The bindings can be full Flexpressions, so they can include conditional evaluations,
-tri-state operatings, and the like.
+tri-state operations, and the like.
+
+For most properties, it's most convenient to bind the property using the inline property
+operator ```=>``` when defining the component:
+
+```java
+    checkBox: JCheckBox( text="Checkbox", selected => "onOff" );
+    textField: JTextField( text => "person.name" );
+```
+
+In this case, the properties will be based on the root model object. If you want to 
+do something more complex, such as binding to an expression that is dependent on multiple
+properties, you can use a bind statement after the components are defined:
+```java
+bind {
+        textField.text => "person.name.toLowerCase() + ':' + person.age" ["person.name", "person.age"];
+}
+
+```
+In this case, the textField ```text``` property is bound to the result of an expression that 
+takes the person.name property, lower cases, and appends the current age. The value of the text
+field will change if either the person.name or the person.age values change.
+
+Expression bindings are unidirectional from the model to the view.
+
 
 Work in progress: *Groups* of view elements can be bound to a single model field.
-This is designed to be used for UI elements such as radio buttons, combo boxes, 
+This is designed to be used for UI elements such as radio buttons, 
 and so forth. If all the view elements in a group are AbstractButton instances,
-a ButtonGroup will automatically be created. 
+a ButtonGroup will automatically be created. For these cases, in addition to 
+creating the bindings you also create a new element that can be added to layouts:
+```java
+    bind {
+        group:{ button1, button2 }.selected => "thing";
+    }
+```
 
 ## Events
-Spwing supports both document events and AWT events. AWT events are automatically generated by 
+Spwing supports both property events and AWT events. AWT events are automatically generated by 
 Spwing components and include events such as mouse movement and button clicks.
-Document events are generated by calling <code>DocumentEventPublisher.publish</code> 
-and are generally used to signal changes to the model state.
+Property events are associated with PropertyChangeListener instances and are generally
+used for model state changes. 
 
-In both cases (document and AWT events), the name of the event follows a convention.
-For document events, the convention is that event names begin with "evt": ```evtNameChanged```.
-For AWT events, the name is based on the method of the event passed to the AWT event
-listener: ```mouseMoved```, ```actionPerformed```. There are two exceptions for AWT
-events. 
+If you are using binding, then you don't have to worry about property change events
+in most cases. The framework will take care of it for you. 
+
+For AWT events, you can create methods in your controller (or model, but don't do that) that
+automatically are called when the event is signalled. Since binding takes care of the property
+change events, this is usually reserved for things like reacting to buttons being clicked, etc.
+Spwing defines an event based on the name of the method in the AWT event listener that would 
+have been called, and looks for a handler method for that event.
+
+For AWT events, you can create a method in the controller class (or the model, but don't do that) 
+that is based on name of the method of the event passed to the AWT event. Take for example
+a mouse moved event. This would be handled by a method ```MouseListener.mouseMoved()```, so for
+Spwing the base event name is 'mouseMoved'. This base name is then used to find a handler
+method as described below. There are only a couple exceptions to this convention:
 - In addition to ```actionPerformed```, button action clicks are also called ```clicked```. 
 The two can be used interchangeably
 - ```HierarchyBoundsListener.ancestorMoved``` is called
 ```hierarchyAncestorMoved``` to disambiguate it from the same event signalled by 
 the ```AncestorListener``` class
 
-Events look for and invoke a method. This method will be automatically discovered;
-there is no need to link the method to a listener. For document events, the method
-name is the event with "evt" replaced by "on":
+Once Spwing sees the AWT event base name, it looks for a handler method to call.
+This method will be automatically discovered;
+there is no need to link the method to a listener. The name is based on the event and the view item. 
+If you have a SVWF definition
 
-```Java
-public void onNameChanged( ... ) {}
+```java
+            button: JButton();
 ```
 
-For AWT events, the name is based on the event and the view item:
+that the user clicks in, Spwing will look for and call a method in your controller:
 
 ```Java
 public void onOKButton_Clicked( ... ) {}
@@ -613,11 +654,20 @@ Event methods follow normal Java camel case conventions, but are case insensitiv
 with the first letter - onMouseMoved will match the mouseMoved event, but not the
 mousemoved event.
 
-Again, if methods are named by convention then **nothing** has be be done to done
-to connect the event to the method. Also, because the method is called via an invoker,
+Again, if methods are named by convention then **nothing** has be be done 
+to connect the event to the method. Also, because the method is called via an Invoker,
 the method can take any parameters that can be discovered at runtime. If the
 naming convention doesn't work, the annotation ```@ListenerFor``` can explicitly
-specify the event name. (In this case, the "evt" prefix must be included.)
+specify the event name and target (if any). The two definitions below result in the 
+same behavior; the first is by convention and the second by annotation.
+
+```java
+    public void onButton_Clicked(...) {
+```
+```java
+    @ListenerFor(target = "button", event="clicked")
+    public void doSomething(...) {
+```
 
 Event listeners are automatically linked to the active document.
 
@@ -685,6 +735,26 @@ is declarative, allowing the specification of the view components, the binding f
 components, and other capabilities.
 
 See SVWFViewFactory for more information
+
+### Undo handling
+Spwing defines an ```UndoHandler``` for each open document. You can use this to automatically
+get undo/redo handling:
+
+```java
+        final PropertyChangeCommand<String> propertyChangeCommand = new PropertyChangeCommand<>("New name", model.getPerson()::getName, model.getPerson()::setName, cmdChangeName);
+        undoManager.addEdit(propertyChangeCommand);
+```
+
+The ```PropertyChangeCommand``` class is a subclass of ```ChangeCommand``` which is specialized for changing
+properties that have setters and getters. ```ChangeCommand``` can be overridden directly for different
+use cases.
+
+In addition to undo/redo handling, the undo manager is used to determine if a document is "dirty" and needs
+to be saved. You can still undo after saving (though that will make the document dirty again). The UndoManager
+is a document-scoped bean, and so is available to any routine (such as handlers, listener, etc) that is
+invoked via the Invoker framework.
+
+See README_UNDO.md for more information.
 
 
 ## Platform resources
