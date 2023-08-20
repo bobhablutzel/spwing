@@ -25,8 +25,25 @@ import org.springframework.lang.NonNull;
 
 import java.util.Set;
 
+
+/**
+ * Utilities for scanning for classes in the active class path.
+ * Wrapper around {@link ClassPathScanningCandidateComponentProvider}
+ * functionality.
+ *
+ * @author Bob Hablutzel
+ */
 public class ClassUtils {
 
+
+    /**
+     * Scan for target classes within the class hierarchy rooted
+     * in the root class. The target class will be anywhere in the
+     * same or any child package as the root class.
+     * @param rootClass The root class
+     * @param targetClass The target class being searched for
+     * @return The set of {@link BeanDefinition} that represent the target class
+     */
     public static @NonNull Set<BeanDefinition> find(Class<?> rootClass, Class<?> targetClass) {
         final ClassPathScanningCandidateComponentProvider provider = new ClassPathScanningCandidateComponentProvider(
                 false, new StandardEnvironment());

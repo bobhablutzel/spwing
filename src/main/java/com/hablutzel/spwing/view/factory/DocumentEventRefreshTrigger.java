@@ -24,13 +24,40 @@ import com.hablutzel.spwing.view.bind.RefreshTrigger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationContext;
 
+
+/**
+ * {@link RefreshTrigger} specialized to listen to document events.
+ * If the document event is signalled, the refresh will occur.
+ * Note: There is currently no SVWF syntax for these refresh events.
+ * This needs to be put back in.
+ * @author Bob Hablutzel
+ * TODO SVWF syntax for this type of refresh
+ */
 @RequiredArgsConstructor
 public class DocumentEventRefreshTrigger implements RefreshTrigger {
 
+    /**
+     * The {@link ApplicationContext} instance
+     */
     private final ApplicationContext applicationContext;
+
+    /**
+     * The {@link DocumentEventDispatcher} associated with the document
+     */
     private final DocumentEventDispatcher documentEventDispatcher;
+
+    /**
+     * The document event name
+     */
     private final String trigger;
 
+
+    /**
+     * Installs the runnable to be called when the document
+     * event is signalled.
+     *
+     * @param runnable The {@link Runnable} to call
+     */
     @Override
     public void onRefresh(final Runnable runnable) {
         documentEventDispatcher.registerListener(trigger, DocumentEventInvoker.from(applicationContext, runnable));

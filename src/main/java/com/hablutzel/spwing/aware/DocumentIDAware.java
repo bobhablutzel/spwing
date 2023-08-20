@@ -18,6 +18,19 @@ package com.hablutzel.spwing.aware;
 
 import java.util.UUID;
 
+
+/**
+ * Provide an interface for services that need to be aware of
+ * the document ID. These services MUST be document scope
+ * and will have the document ID injected on creation.
+ *
+ * @author Bob Hablutzel
+ */
 public interface DocumentIDAware {
-    void setDocumentID(UUID documentID);
+
+    /**
+     * Routine to set the document ID.
+     * @param documentID The document ID
+     */
+    void setDocumentID(final UUID documentID);
 }

@@ -23,7 +23,7 @@ import lombok.Setter;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.swing.*;
+import javax.swing.JMenuItem;
 import java.util.Arrays;
 import java.util.function.Function;
 
@@ -58,9 +58,12 @@ public class CommandMethods {
 
 
     /**
+     * Check to see if a menu item is enabled. This works by
+     * seeing if the associated command is enabled.
      * Commands are enabled if (a) they have an enabler, and the
      * enabler returns true, or (b) they do not have an enabler but
      * do have a handler.
+     * @param menuItem  The menu item that we are checking
      * @return TRUE for enabled commands.
      */
     public boolean isEnabled(final JMenuItem menuItem) {
@@ -91,6 +94,8 @@ public class CommandMethods {
      * @param clazz The expected result type
      * @param defaultValue The default value to return
      * @param injectedValues Values that can be injected into the invocation context
+     * @param <T> The expected result type
+     * @return The result of the command (may be null)
      */
     @SafeVarargs
     public final <T> T fireCommandWithResult(final Class<T> clazz,

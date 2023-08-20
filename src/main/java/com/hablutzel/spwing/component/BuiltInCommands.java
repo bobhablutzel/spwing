@@ -17,11 +17,7 @@
 package com.hablutzel.spwing.component;
 
 import com.hablutzel.spwing.Spwing;
-import com.hablutzel.spwing.annotations.EnablerFor;
-import com.hablutzel.spwing.annotations.Handler;
-import com.hablutzel.spwing.annotations.HandlerFor;
-import com.hablutzel.spwing.annotations.MenuSource;
-import com.hablutzel.spwing.annotations.Model;
+import com.hablutzel.spwing.annotations.*;
 import com.hablutzel.spwing.command.CommandAwareUndoManager;
 import com.hablutzel.spwing.context.DocumentSession;
 import com.hablutzel.spwing.invoke.ParameterResolution;
@@ -46,25 +42,15 @@ import org.springframework.stereotype.Component;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.undo.UndoManager;
-import java.awt.*;
-import java.awt.desktop.QuitEvent;
+import java.awt.BorderLayout;
+import java.awt.Window;
 import java.awt.desktop.QuitResponse;
-import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutput;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.io.*;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -122,13 +108,26 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
+    /**
+     * Enables the Undo command if there are undoable edits that can be
+     * undone. This also changes the menu item text for the undo
+     * command to reflect the name of the undoable edit
+     *
+     * @param undoManager The {@link UndoManager}
+     * @param menuItem The {@link JMenuItem} that displays cmdUndo
+     * @return TRUE for enabling cmdUndo
+     */
     @EnablerFor("cmdUndo")
     @SuppressWarnings("unused")
     public boolean defaultEnableUndoBehavior( @Nullable final UndoManager undoManager,
                                               @Nullable final JMenuItem menuItem ) {
+
+        // Make sure we have an undo manager
         final boolean canUndo = null != undoManager && undoManager.canUndo();
-        final String presentationString = canUndo ? undoManager.getUndoPresentationName() : "";
+
+        // If the menu item is available, change the text to match the undo item
         if (null != menuItem) {
+            final String presentationString = canUndo ? undoManager.getUndoPresentationName() : "";
             menuItem.setText(applicationContext.getMessage("cmdUndo",
                     new Object[]{ presentationString },
                     Locale.getDefault()));
@@ -137,7 +136,14 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
-
+    /**
+     * Default redo behavior. Delegates to the undo manager.
+     * Note this assumes that the default enable redo behavior
+     * has already run and validated the existance of the undo manager
+     *
+     * @param undoManager The current undo manager
+     * @see #defaultEnableRedoBehavior(UndoManager, JMenuItem)
+     */
     @HandlerFor("cmdRedo")
     @SuppressWarnings("unused")
     public void defaultRedoBehavior( final UndoManager undoManager ) {
@@ -145,13 +151,27 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
+    /**
+     * Enables the Redo command if there are undoable edits that can be
+     * redone. This also changes the menu item text for the redo
+     * command to reflect the name of the undoable edit
+     *
+     * @param undoManager The {@link UndoManager}
+     * @param menuItem The {@link JMenuItem} that displays cmdRedo
+     * @return TRUE for enabling cmdUndo
+     */
     @EnablerFor("cmdRedo")
     @SuppressWarnings("unused")
     public boolean defaultEnableRedoBehavior( @Nullable final UndoManager undoManager,
                                               @Nullable final JMenuItem menuItem  ) {
+
+        // See that we can redo
         final boolean canRedo = null != undoManager && undoManager.canRedo();
-        final String presentationString = canRedo ? undoManager.getRedoPresentationName() : "";
+
+        // If the menu item exists, change the presentation string to represent the
+        // command to be redone
         if (null != menuItem) {
+            final String presentationString = canRedo ? undoManager.getRedoPresentationName() : "";
             menuItem.setText(applicationContext.getMessage("cmdRedo",
                     new Object[]{ presentationString },
                     Locale.getDefault()));
@@ -212,8 +232,8 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
             // First test - see if there is a primaryModel bean defined.
             if (null != applicationContext && applicationContext.containsBean("primaryModel")) {
                 Object primaryModelBean = applicationContext.getBean("primaryModel" );
-                if (primaryModelBean instanceof Class<?> primaryModelClass) {
-                    this.primaryModelClass = primaryModelClass;
+                if (primaryModelBean instanceof Class<?> primaryModelBeanClass) {
+                    this.primaryModelClass = primaryModelBeanClass;
                 } else {
                     log.warn( "Bean primaryModel was defined, but is not a Class definition");
                 }
@@ -246,7 +266,15 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
         return this.primaryModelClass;
     }
 
-    private Class<?> configurationDefinitionToModelClass(BeanDefinition beanDefinition) {
+    /**
+     * Attempt to convert a bean definition that has a
+     * {@link ModelConfiguration} interface into the model class
+     * that is being configured.
+     *
+     * @param beanDefinition The {@link BeanDefinition}
+     * @return The class representing the generic model for the configuration class
+     */
+    private Class<?> configurationDefinitionToModelClass(final BeanDefinition beanDefinition) {
         try {
 
             // Get the bean class name as a resolvable type
@@ -271,6 +299,12 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
+    /**
+     * Enables the open command if there is a primary model with
+     * defined file extensions. File extensions will be defined
+     * as a bean by the model configuration class.
+     * @return TRUE if open can be performed
+     */
     @EnablerFor("cmdOpen")
     @SuppressWarnings("unused")
     public boolean defaultEnableOpenBehavior() {
@@ -279,6 +313,13 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
         return null != getPrimaryModelClass() && !FileChooserUtils.getActiveFileExtensions(applicationContext).isEmpty();
     }
 
+
+    /**
+     * Enables the new command if there is defined primary model
+     * that can be opened
+     * @return TRUE if cmdNew should be enabled
+     * @see #getPrimaryModelClass()
+     */
     @EnablerFor("cmdNew")
     @SuppressWarnings("unused")
     public boolean defaultEnableNewBehavior() {
@@ -286,7 +327,11 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
-
+    /**
+     * Provides default About box behavior. This routine creates an about
+     * with information about the application and displays it.
+     * @param spwing The {@link Spwing} instance
+     */
     @HandlerFor("cmdAbout")
     @SuppressWarnings("unused")
     public void defaultAboutBehavior(final Spwing spwing) {
@@ -354,22 +399,32 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
      */
     @HandlerFor("cmdNOP")
     @SuppressWarnings({"unused"})
-    public void noActionHandler(ActionEvent event) {
+    public void noActionHandler() {
         log.debug("This method intentionally left blank");
     }
 
 
+    /**
+     * Enables the cmdClose if there is an active model
+     * @param theModel The active root model object for the document
+     * @return TRUE if the close command is enabled
+     */
     @EnablerFor("cmdClose")
     @SuppressWarnings("unused")
-    public boolean defaultEnableCloseBehavior( @Nullable final DocumentSession documentSession,
-                                               @Nullable @Model final Object theModel) {
+    public boolean defaultEnableCloseBehavior( @Nullable @Model final Object theModel) {
 
         // Enable the default close if there is a model to close
         return null != theModel;
     }
 
 
-
+    /**
+     * The default close behavior. Attempts to save the document if needed
+     * before closing the window.
+     * @param jFrame The Swing {@link JFrame} instance
+     * @param theWindow The associated AWS {@link Window} instance
+     * @param theModel The root model object
+     */
     @HandlerFor("cmdClose")
     @SuppressWarnings("unused")
     public void defaultCloseBehavior(final @NonNull JFrame jFrame,
@@ -424,7 +479,7 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     @SuppressWarnings("unused")
     public boolean defaultEnableSaveBehavior(@Nullable final CommandAwareUndoManager undoManager,
                                              @Nullable final @Model Object theModel) {
-        return  null != theModel && null != undoManager &&
+        return  null != undoManager &&
                 theModel instanceof Serializable &&
                 !FileChooserUtils.getActiveFileExtensions(applicationContext).isEmpty() &&
                 undoManager.changesHaveOccurredSinceLastCheckpoint();
@@ -443,6 +498,8 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
      * The default save behavior will look for the fileExtension bean
      * to see what types to use. The first type will be used by default.
      * @param documentSession The {@link DocumentSession} instance containing information about the document
+     * @param theModel The underlying model root object, which will be saved if needed
+     * @param jFrame The view frame associated with the document (used to modify the title)
      */
     @HandlerFor("cmdSave")
     @SuppressWarnings("unused")
@@ -538,9 +595,16 @@ public final class BuiltInCommands implements MessageSourceAware, ApplicationCon
     }
 
 
+    /**
+     * Default quit functionality. Attempts to close all the
+     * open windows and then exits
+     * @param spwing The {@link Spwing} instance
+     * @param response The {@link QuitResponse} for cancelling the quit of the close fails
+     */
     @HandlerFor("cmdQuit")
     @SuppressWarnings("unused")
-    public void defaultQuitBehavior(Spwing spwing, QuitEvent event, QuitResponse response) {
+    public void defaultQuitBehavior(final Spwing spwing,
+                                    final QuitResponse response) {
 
         // We need to close any windows that haven't been closed already
         // The Window.getWindows() list may include windows that have been

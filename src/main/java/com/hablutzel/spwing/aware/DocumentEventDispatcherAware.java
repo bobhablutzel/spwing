@@ -18,6 +18,18 @@ package com.hablutzel.spwing.aware;
 
 import com.hablutzel.spwing.events.DocumentEventDispatcher;
 
+/**
+ * Used for classes that need to know about the {@link DocumentEventDispatcher}
+ * for the current document. Classes with this annotation will have the
+ * document event dispatcher injected at bean creation time.
+ *
+ * @author Bob Hablutzel
+ */
 public interface DocumentEventDispatcherAware {
+
+    /**
+     * Required method to accept the document event dispatcher
+     * @param documentEventDispatcher The {@link DocumentEventDispatcher} instance
+     */
     void setDocumentEventDispatcher( DocumentEventDispatcher documentEventDispatcher );
 }

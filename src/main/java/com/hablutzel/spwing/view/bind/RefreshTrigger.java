@@ -17,6 +17,7 @@
 
 package com.hablutzel.spwing.view.bind;
 
+
 public interface RefreshTrigger {
 
     void onRefresh( final Runnable runnable );

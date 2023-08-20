@@ -31,13 +31,7 @@ import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.ResolvableType;
 
 import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -45,17 +39,6 @@ import java.util.function.Function;
 @Slf4j
 @RequiredArgsConstructor
 public abstract class Invoker {
-
-    private final static Map<Class<?>, ResolvableType> PRIMITIVE_MAP = Map.of(
-            Boolean.TYPE, ResolvableType.forClass(Boolean.class),
-            Byte.TYPE, ResolvableType.forClass(Byte.class),
-            Character.TYPE, ResolvableType.forClass(Character.class),
-            Float.TYPE, ResolvableType.forClass(Float.class),
-            Integer.TYPE, ResolvableType.forClass(Integer.class),
-            Long.TYPE, ResolvableType.forClass(Long.class),
-            Short.TYPE, ResolvableType.forClass(Short.class),
-            Double.TYPE, ResolvableType.forClass(Double.TYPE)
-    );
 
     /**
      * {@link Invoker} is designed to be as independent of framework (other than
@@ -153,13 +136,6 @@ public abstract class Invoker {
         return ParameterResolution.unresolved();
     }
 
-    private ResolvableType mapPrimitive(ResolvableType resolvableType) {
-        Class<?> clazz = resolvableType.getRawClass();
-        return null != clazz && clazz.isPrimitive()
-                ? PRIMITIVE_MAP.get(clazz)
-                : resolvableType;
-    }
-
 
     /**
      * Routine to get a bean from a supplier, for the types that have
@@ -224,19 +200,6 @@ public abstract class Invoker {
         }
     }
 
-    /**
-     * Attempt to a single bean in the map that is marked as {@link Primary}
-     *
-     * @param beans The map of beans
-     * @return The single bean, or null if there isn't one and only one
-     */
-    private Object getPrimary(Map<String, ?> beans) {
-
-        List<String> primaryNames = beans.keySet().stream()
-                .filter(name -> null != context.findAnnotationOnBean(name, Primary.class))
-                .toList();
-        return primaryNames.size() == 1 ? beans.get(primaryNames.get(0)) : null;
-    }
 
     /**
      * Build the argument for the specified parameter. This argument will be
@@ -388,10 +351,26 @@ public abstract class Invoker {
 
     }
 
+    /**
+     * List describing the parameters for this method
+     * @return The list of {@link ParameterDescription}
+     */
     protected abstract List<? extends ParameterDescription> getParameterDescriptions();
 
+
+    /**
+     * Called to actually invoke the functionality once the arguments
+     * have been determined.
+     *
+     * @param dynamicArguments The arguments
+     * @return The results of the functionality
+     */
     protected abstract Object doInvoke(Object[] dynamicArguments);
 
+    /**
+     * Get the method name being called
+     * @return The method name
+     */
     protected abstract String getMethodName();
 
     /**
@@ -401,7 +380,7 @@ public abstract class Invoker {
      * @param parameterDescription The parameter description
      * @return null
      */
-    private Object handleUnresolvedParameter(ParameterDescription parameterDescription) {
+    private Object handleUnresolvedParameter(final ParameterDescription parameterDescription) {
         // That might be OK, if we have an optional argument. In this case,
         // use null as the result. Otherwise, add this to the list of
         // unresolved parameters so that we know we can't continue forward.

@@ -29,22 +29,22 @@ be directly supported as they are internal to other components or abstract)
   - ~~javax.swing.JSpinner.NumberEditor~~
   - ~~javax.swing.DefaultListCellRenderer~~ part of table support
   - javax.swing.JCheckBoxMenuItem
-  - javax.swing.JColorChooser
+  - ~~javax.swing.JColorChooser~~
   - ~~javax.swing.JComboBox~~
   - javax.swing.JInternalFrame.JDesktopIcon
-  - ~~~javax.swing.JDesktopPane~~~
+  - ~~javax.swing.JDesktopPane~~
   - javax.swing.JEditorPane
-  - ~~~javax.swing.JFileChooser~~~
-  - ~~~javax.swing.JFormattedTextField~~~
+  - ~~javax.swing.JFileChooser~~
+  - ~~javax.swing.JFormattedTextField~~
   - javax.swing.JInternalFrame
   - javax.swing.JLayer
   - javax.swing.JLayeredPane
   - javax.swing.JList
-  - ~~~javax.swing.JMenu~~~
-  - ~~~javax.swing.JMenuBar~~~
-  - ~~~javax.swing.JMenuItem~~~
+  - ~~javax.swing.JMenu~~
+  - ~~javax.swing.JMenuBar~~
+  - ~~javax.swing.JMenuItem~~
   - javax.swing.JOptionPane
-  - ~~~javax.swing.JPasswordField~~~
+  - ~~javax.swing.JPasswordField~~
   - javax.swing.JPopupMenu
   - javax.swing.JProgressBar
   - javax.swing.JRadioButtonMenuItem
@@ -53,7 +53,7 @@ be directly supported as they are internal to other components or abstract)
   - javax.swing.JScrollPane
   - javax.swing.JSeparator
   - javax.swing.JSlider
-  - ~~~javax.swing.JSpinner~~~
+  - ~~javax.swing.JSpinner~~
   - javax.swing.JSplitPane
   - javax.swing.JTabbedPane
   - javax.swing.JTable

@@ -39,7 +39,11 @@ public class PropertyAccessor extends Accessor {
 
     public void set(Object value) {
         final Class<?> propertyType = beanWrapper.getPropertyType(propertyName);
-        beanWrapper.setPropertyValue(propertyName, conversionService.convert(value, propertyType));
+        final Object convertedValue = null != propertyType ? conversionService.convert(value, propertyType) : value;
+        final Object currentValue = beanWrapper.getPropertyValue(propertyName);
+        if ((null == currentValue && null != convertedValue) || (null != currentValue && !currentValue.equals(convertedValue))) {
+            beanWrapper.setPropertyValue(propertyName, convertedValue );
+        }
     }
 
     public Object get() {

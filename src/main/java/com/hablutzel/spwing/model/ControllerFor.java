@@ -17,5 +17,20 @@
 
 package com.hablutzel.spwing.model;
 
+
+/**
+ * Defines a class that is a controller associated with the specified model class.
+ * This is used when looking for the controllers for a model during the model
+ * opening time. The controller instances should be defined as a service in
+ * scope "document".
+ * <pre>{@code
+ * @Service
+ * @Scope("document")
+ * public class MyControllerClass implements ControllerFor<MyModel>
+ * }</pre>
+ * @param <M> The model class
+ * @author Bob Hablutzel
+ */
+@SuppressWarnings("unused")
 public interface ControllerFor<M>{
 }

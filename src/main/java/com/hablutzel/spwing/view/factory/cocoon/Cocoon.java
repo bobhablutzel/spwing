@@ -29,7 +29,9 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.lang.NonNull;
 
 import java.awt.Component;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -70,6 +72,8 @@ public class Cocoon<T extends Component> {
      */
     private final ConversionService conversionService;
 
+    private final Set<String> allowedBidirectionalProperties;
+
     /**
      * A {@link RefreshListener} used for listening to changes to the generic properties
      */
@@ -86,11 +90,13 @@ public class Cocoon<T extends Component> {
      */
     public Cocoon(final T component,
                   final ViewComponentFactory<T> factory,
-                  final ConversionService conversionService) {
+                  final ConversionService conversionService,
+                  final String... bidirectionalElements) {
         this.component = component;
         this.factory = factory;
         this.conversionService = conversionService;
         this.beanWrapper = new BeanWrapperImpl(component);
+        this.allowedBidirectionalProperties = new HashSet<>(Set.of(bidirectionalElements));
     }
 
     /**
@@ -116,7 +122,9 @@ public class Cocoon<T extends Component> {
      */
     public AllowedBindings allowedBindings(final String propertyName) {
         return this.canSetProperty(propertyName) && !propertyName.equals("name")
-                ? AllowedBindings.BIDIRECTIONAL
+                ? allowedBidirectionalProperties.contains(propertyName)
+                        ? AllowedBindings.BIDIRECTIONAL
+                        : AllowedBindings.FROM_MODEL
                 : AllowedBindings.NONE;
     }
 

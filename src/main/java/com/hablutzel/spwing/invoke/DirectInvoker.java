@@ -23,22 +23,52 @@ import org.springframework.context.ApplicationContext;
 
 import java.util.List;
 
+
+/**
+ * DirectInvoker is used in cases where the actual target method for
+ * an invoker can be known at compile time. In this case, the code
+ * can participate in the {@link Invoker} functionality while not
+ * incurring the overhead of reflective calls. Subclasses will have
+ * to override {@link Invoker#doInvoke(Object[])} in order to call
+ * the right method.
+ *
+ * @author Bob Hablutzel
+ */
+@Getter
 @Slf4j
 public abstract class DirectInvoker extends Invoker {
 
-    @Getter
+    /**
+     * The method name. Needed to meet the {@link Invoker} contract
+     */
     private final String methodName;
+
+    /**
+     * The list of parameter descriptions. Needed to meet the {@link Invoker} contract
+     */
     private final List<DirectParameterDescription> parameterDescriptions;
 
 
-    public DirectInvoker(ApplicationContext applicationContext, final String methodName, List<DirectParameterDescription> parameterDescriptions ) {
+    /**
+     * Constructor
+     * @param applicationContext The {@link ApplicationContext} instance
+     * @param methodName The method name
+     * @param parameterDescriptions The parameters
+     */
+    public DirectInvoker(final ApplicationContext applicationContext,
+                         final String methodName,
+                         final List<DirectParameterDescription> parameterDescriptions ) {
         super(applicationContext);
         this.methodName = methodName;
         this.parameterDescriptions = parameterDescriptions;
     }
 
 
-
+    /**
+     * Getter for the parameter list. Has to be directly coded
+     * to accommodate the generic type change
+     * @return The list of parameter descriptors
+     */
     @Override
     protected List<? extends ParameterDescription> getParameterDescriptions() {
         return parameterDescriptions;

@@ -22,24 +22,50 @@ import org.springframework.core.ResolvableType;
 
 import java.lang.annotation.Annotation;
 
+
+/**
+ * Parameter description for a directly called function
+ *
+ * @author Bob Hablutzel
+ */
+@Getter
 @RequiredArgsConstructor
 public class DirectParameterDescription implements ParameterDescription {
 
-    @Getter
+    /**
+     * The parameter name
+     */
     private final String name;
 
-    @Getter
+    /**
+     * The parameter type
+     */
     private final ResolvableType type;
 
-    @Getter
+    /**
+     * TRUE for varargs parameters
+     */
     private final boolean varArgs;
 
-    @Getter
+    /**
+     * The index of the parameter in the parameter list
+     */
     private final int index;
 
-    @Getter
+    /**
+     * TRUE for an optional parameter (nullable)
+     */
     private final boolean optional;
 
+
+    /**
+     * Constructor
+     * @param name The parameter name
+     * @param clazz The class of the parameter
+     * @param varArgs TRUE for varargs
+     * @param index The index of the parameter
+     * @param optional TRUE for optional parameters
+     */
     public DirectParameterDescription(
             final String name,
             final Class<?> clazz,
@@ -49,11 +75,21 @@ public class DirectParameterDescription implements ParameterDescription {
         this(name, ResolvableType.forClass(clazz), varArgs, index, optional );
     }
 
+    /**
+     * Is the parameter annotated with a specified annotation
+     * @param clazz The target annotation
+     * @return Always returns false
+     */
     @Override
     public boolean hasParameterAnnotation(Class<? extends Annotation> clazz) {
         return false;
     }
 
+    /**
+     * Get the annotation for the parameter
+     * @param clazz The annotation class
+     * @return Always returns null
+     */
     @Override
     public Annotation getParameterAnnotation(Class<? extends Annotation> clazz) {
         return null;

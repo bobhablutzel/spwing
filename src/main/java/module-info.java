@@ -20,6 +20,7 @@ module spwing {
     exports com.hablutzel.spwing;
     exports com.hablutzel.spwing.annotations;
     exports com.hablutzel.spwing.aware;
+    exports com.hablutzel.spwing.command;
     exports com.hablutzel.spwing.component;
     exports com.hablutzel.spwing.context;
     exports com.hablutzel.spwing.events;

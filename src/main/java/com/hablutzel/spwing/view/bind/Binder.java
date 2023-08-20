@@ -25,7 +25,7 @@ import org.springframework.lang.NonNull;
 import java.util.List;
 
 /**
- * Watch binder instances watch Swing components, watching
+ * Binder instances watch Swing components, watching
  * for changes in the state of those components. When those
  * changes occur, the current value of the target control is
  * pushed to the access.<br>
@@ -33,15 +33,37 @@ import java.util.List;
  * this is the pseudo-property associated with the control
  * when it is created. This value is immutable and passed to the binder
  * at the time the binder is bound.
+ * Note: This binding mechanism is no longer (as of Spwing 0.6.2) used
+ * for individual components, only for button groups. A near future
+ * release will likely remove this mechanism completely.
+ *
  * @author Bob Hablutzel
  */
 public interface Binder {
 
+    /**
+     * Bind a property beteeen a bean wrapper and an {@link Accessor}
+     *
+     * @param componentWrapper The {@link BeanWrapper} around the Swing component
+     * @param propertyName The Swing component property name
+     * @param authoritativeValueAccessor The authoritative (model) value accessor
+     * @return TRUE for successful binding
+     */
     boolean binds(@NonNull final BeanWrapper componentWrapper,
                   @NonNull final String propertyName,
                   @NonNull final Accessor authoritativeValueAccessor);
 
 
+    /**
+     * Bind a property beteeen a bean wrapper and an {@link Accessor}
+     *
+     * @param wrappedTargetObject The {@link BeanWrapper} around the Swing component
+     * @param propertyName The Swing component property name
+     * @param targetObjectValue The component wrapped by the wrappedTargetObject
+     * @param authoritativeValueAccessor The authoritative (model) value accessor
+     * @param triggers A list of {@link RefreshTrigger} instances
+     * @param applicationContext The active {@link ApplicationContext} instance
+     */
     void bind(@NonNull final BeanWrapper wrappedTargetObject,
               @NonNull final String propertyName,
               @NonNull final Object targetObjectValue,

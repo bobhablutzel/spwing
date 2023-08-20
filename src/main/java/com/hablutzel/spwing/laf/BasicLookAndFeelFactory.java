@@ -19,27 +19,49 @@ package com.hablutzel.spwing.laf;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.swing.*;
+import javax.swing.LookAndFeel;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 import java.lang.reflect.InvocationTargetException;
 
 
+/**
+ * LookAndFeelFactory for a basic default look and feel.
+ * Can be used as a base class for other look and feel classes
+ * @author Bob Hablutzel
+ */
 @RequiredArgsConstructor
 @Slf4j
 public class BasicLookAndFeelFactory implements LookAndFeelFactory {
 
+    /**
+     * The look and feel class name
+     */
     private final String lookAndFeelClassName;
 
+    /**
+     * Get the look and feel.
+     * @return The {@link LookAndFeel} instance
+     */
     @Override
     public LookAndFeel get() {
         return buildLookAndFeel(lookAndFeelClassName);
     }
 
 
+    /**
+     * Build the look and feel for the given class
+     *
+     * @param lookAndFeelClassName The name of the look and feel class
+     * @return The {@link LookAndFeel} instance built from that class
+     */
     public LookAndFeel buildLookAndFeel(String lookAndFeelClassName) {
         try {
+
+            // See if we can load that LAF class
             Class<?> lafClass = Class.forName(lookAndFeelClassName);
             Object instance = lafClass.getDeclaredConstructor().newInstance();
+
+            // Make sure we actually got a LookAndFeel and not something else
             if (instance instanceof LookAndFeel lookAndFeel) {
                 log.debug( "Look and feel used: {}", lookAndFeel);
                 return lookAndFeel;

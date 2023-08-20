@@ -20,23 +20,33 @@ import com.jthemedetecor.OsThemeDetector;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SystemUtils;
 
-import javax.swing.*;
+import javax.swing.LookAndFeel;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.plaf.metal.MetalLookAndFeel;
-import java.awt.*;
+import java.awt.Window;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 
 /**
- * The DefaultLookAndFeelFactory returns a {@link MetalLookAndFeel}
- * on all platforms except on MacOS, it attempts to use the
- * "FlatMacDarkLAF" if it is available.
+ * The ReactiveLookAndFeelFactory implements a {@link LookAndFeelFactory}
+ * that is aware of both the OS and the dark/light state of the user settings.
+ * For all platforms but MacOS, uses {@link MetalLookAndFeel} by default
+ * unless overridden. For MacOS, uses separate light and dark themes provided
+ * by the subclass, and reacts to changes in the light/dark state of the user
+ * UI settings.
  *
  * @author Bob Hablutzel
  */
 @Slf4j
 public abstract class ReactiveLookAndFeelFactory implements LookAndFeelFactory {
 
+    /**
+     * Get the {@link LookAndFeel} to use
+     * @return The {@link LookAndFeel} instance
+     */
     @Override
     public LookAndFeel get() {
         final OsThemeDetector detector = OsThemeDetector.getDetector();
@@ -49,7 +59,14 @@ public abstract class ReactiveLookAndFeelFactory implements LookAndFeelFactory {
         return get(detector.isDark());
     }
 
-    private void reactToThemeChange(Boolean isDark) {
+
+    /**
+     * Routine to react to a theme change. If the user changes their
+     * environment from light to dark, this routine will react to that
+     * change and reset the look and feel
+     * @param isDark TRUE if the user now uses dark mode
+     */
+    private void reactToThemeChange(final Boolean isDark) {
         try {
 
             // Set the new look & feel
@@ -65,10 +82,25 @@ public abstract class ReactiveLookAndFeelFactory implements LookAndFeelFactory {
     }
 
 
+    /**
+     * Routine to get the light theme
+     * @return The light theme class name
+     */
     public abstract String getLightThemeName();
+
+    /**
+     * Routine to get the dark theme name
+     * @return The dark theme class name
+     */
     public abstract String getDarkThemeName();
 
 
+    /**
+     * Get the look and theme in a platform specific way
+     *
+     * @param isDarkThemeUsed TRUE if the dark theme should be used
+     * @return The {@link LookAndFeel} to use
+     */
     private LookAndFeel get(boolean isDarkThemeUsed) {
         if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
 
@@ -87,6 +119,8 @@ public abstract class ReactiveLookAndFeelFactory implements LookAndFeelFactory {
                 log.warn("For MacOS, attempt to use the FlatMac Dark look and feel failed", e);
             }
         }
+
+        // Default to metal
         return new MetalLookAndFeel();
     }
 }

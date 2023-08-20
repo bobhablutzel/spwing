@@ -100,10 +100,12 @@ public class CommandMethodsScanner {
      * least to most specific, so commands will overwrite commands from
      * earlier document components.
      *
-     * @param spwing
+     * @param spwing The {@link Spwing} instance
      * @param documentComponents The document components
+     * @return A mapping from command names to {@link CommandMethods} instances
      */
-    public Map<String, CommandMethods> scanDocumentComponents(Spwing spwing, final List<Object> documentComponents) {
+    public Map<String, CommandMethods> scanDocumentComponents(final Spwing spwing,
+                                                              final List<Object> documentComponents) {
 
         log.debug("Scanning document components {}", documentComponents);
 
@@ -112,9 +114,23 @@ public class CommandMethodsScanner {
     }
 
 
-
+    /**
+     * Class for scanning individual classes for command handlers,
+     * enablers, and listeners. As document classes (controllers, models)
+     * and application classes (root context classes, built in commands) are
+     * added to framework, they are maintained in a hierarchy arranged from
+     * the least customized to the most customized - that is, the built in
+     * commands will be in the list before the document controller. This
+     * allows the document specific classes to override the built-in
+     * functionality just be defining a new method that provides the funtionality.
+     *
+     * @author Bob Hablutzel
+     */
     private final class Scanner {
 
+        /**
+         * The resulting map of command names to {@link CommandMethods}
+         */
         private final Map<String, CommandMethods> commandMethodsMap = new HashMap<>();
 
         /**
@@ -122,21 +138,44 @@ public class CommandMethodsScanner {
          */
         private final DocumentEventDispatcher documentEventDispatcher;
 
+        /**
+         * The {@link ApplicationContext} instance
+         */
         private final ApplicationContext applicationContext;
 
+
+        /**
+         * Constructor.
+         * @param spwing The {@link Spwing} instance
+         */
         Scanner(Spwing spwing) {
             this.applicationContext = spwing.getApplicationContext();
             this.documentEventDispatcher = spwing.getDocumentScopeManager().getDocumentEventDispatcher();
         }
 
-        private static String lowerCaseFirst(String input) {
+
+        /**
+         * Helper routine to lower case the first letter of a string
+         *
+         * @param input The input string
+         * @return The input string with the first letter moved to lower case
+         */
+        private static String lowerCaseFirst(final String input) {
             return input.substring(0, 1).toLowerCase() + input.substring(1);
         }
 
+        /**
+         * Scan a list of components. These components represent objects
+         * that can potentially provide handlers, enablers, and listeners and
+         * are comprised of the application, the model, the controller, and
+         * framework components such as the built-in commands.
+         *
+         * @param documentComponents The list of document components
+         * @return The map of command names to {@link CommandMethods}
+         */
         public Map<String, CommandMethods> doScan(final List<Object> documentComponents) {
 
-
-            // Scan the documents. We will get the documents in least- to most-important
+            // Scan the components. We will get the components in least- to most-important
             // order, so more important components will automatically override functionality
             // in less important ones. This allows us to provide default behavior and have
             // the implementation override that behavior.
@@ -153,7 +192,7 @@ public class CommandMethodsScanner {
          *
          * @param documentComponent The component to scan
          */
-        private void scanDocumentComponent(Object documentComponent) {
+        private void scanDocumentComponent(final Object documentComponent) {
 
             log.debug("Scanning document component class {}", documentComponent.getClass().getName());
 
@@ -185,7 +224,8 @@ public class CommandMethodsScanner {
          * @param documentComponent The component object - an instance of a class annotated with {@link Handler}
          * @param method            The method of that component object under evaluation
          */
-        private void evaluateAsTargetMethod(Object documentComponent, Method method) {
+        private void evaluateAsTargetMethod(final Object documentComponent,
+                                            final Method method) {
 
             // Analyze the method name
             final String methodName = method.getName();
@@ -233,7 +273,8 @@ public class CommandMethodsScanner {
          * @param targetName        The target of the event (could be null)
          * @return The event name to use
          */
-        private String sanitizeEventName(final String proposedEventName, final String targetName) {
+        private String sanitizeEventName(final String proposedEventName,
+                                         final String targetName) {
 
             // This can only be null when no view is open - meaning no AWT events.
             // Nothing to do here in that case
@@ -282,10 +323,11 @@ public class CommandMethodsScanner {
         /**
          * When the target name is inferred from the method name, it could be
          * specified with a leading upper case letter rather than a lower-case
-         * letter. In this case, we have to
+         * letter. In this case, we have to see if there is a match as it is, and
+         * if not attempt it with a lower case.
          *
-         * @param proposedName
-         * @return
+         * @param proposedName The proposed name
+         * @return The actual sanitized name
          */
         private String sanitizeTargetName(String proposedName) {
             if (null != proposedName && !proposedName.isBlank() && null != documentEventDispatcher) {
@@ -303,35 +345,83 @@ public class CommandMethodsScanner {
             return proposedName;
         }
 
-        private void defineEnabler(String methodNameSuffix, EnablerFor enablerFor, ReflectiveInvoker reflectiveInvoker) {
+        /**
+         * Add a new enabler to the command methods being built
+         *
+         * @param methodNameSuffix The method name suffix in case we have to build a command name on the fly
+         * @param enablerFor The {@link EnablerFor} annotation if specified
+         * @param reflectiveInvoker The {@link ReflectiveInvoker} representing how to call the method
+         */
+        private void defineEnabler(final String methodNameSuffix,
+                                   final EnablerFor enablerFor,
+                                   final ReflectiveInvoker reflectiveInvoker) {
             String commandID = null != enablerFor ? enablerFor.value() : methodNameToCommandName(methodNameSuffix);
             getCommandMethods(commandID).setEnabler(reflectiveInvoker);
         }
 
 
+        /**
+         * Defines a handler method. Adds the handler method to the command
+         * method for the command associated with the method name or annotation
+         * @param methodNameSuffix The method name suffix for inferred command names
+         * @param handlerFor The {@link HandlerFor} annotation providing the command name
+         * @param reflectiveInvoker The {@link ReflectiveInvoker} used to call the method
+         */
         private void defineHandler(String methodNameSuffix, HandlerFor handlerFor, ReflectiveInvoker reflectiveInvoker) {
             String commandID = null != handlerFor ? handlerFor.value() : methodNameToCommandName(methodNameSuffix);
             getCommandMethods(commandID).setHandler(reflectiveInvoker);
         }
 
+
+        /**
+         * Convert a method name suffix to a command name
+         * @param methodNameSuffix The method name suffix
+         * @return The corresponding command name
+         */
         private String methodNameToCommandName(String methodNameSuffix) {
             return String.format("cmd%s", methodNameSuffix);
         }
 
 
-        private void defineListener(ReflectiveInvoker reflectiveInvoker, String eventName, String target, EventFamily eventFamily) {
+        /**
+         * Define a listener function. Adds the listener to the
+         * document event dispatcher that is associated with the current
+         * document so that when events are dispatched, the dispatcher
+         * knows what methods to call
+         *
+         * @param reflectiveInvoker The {@link ReflectiveInvoker} to call the listener function
+         * @param eventName The event name
+         * @param target The target object. This is the name of the view component
+         *               that the event will be received from, and could be null or blank
+         *               in which case the event will come from any active view component
+         * @param eventFamily The event family - used to determine if the event was
+         *                    by convention or annotation
+         */
+        private void defineListener(final ReflectiveInvoker reflectiveInvoker,
+                                    final String eventName,
+                                    final String target,
+                                    final EventFamily eventFamily) {
 
-
+            // Make sure there is an document event dispatch available
             if (null != documentEventDispatcher) {
                 // Use the family passed in, or attempt to guess if needed.
                 EventFamily family = eventFamily == EventFamily.Introspection
                         ? determineEventFamily(eventName)
                         : eventFamily;
 
+                // For AWT events, get the adapter map from the document event
+                // dispatcher. This lets us find the specific event adapter for the
+                // target of the event, or in the case the target is specified all
+                // the component event adapters.
                 if (family == EventFamily.AWT) {
                     Map<String, EventAdapter> eventAdapterMap = documentEventDispatcher.getEventAdapterMap();
                     if (null != target && !target.isBlank()) {
+
+                        // This is attempting to target a specific component. See
+                        // that we have that component
                         EventAdapter eventAdapter = eventAdapterMap.get(target);
+
+                        // We have it - can it understand the event
                         if (null != eventAdapter && eventAdapter.understands(eventName)) {
                             eventAdapter.attachListener(eventName, reflectiveInvoker);
                         } else {
@@ -352,14 +442,26 @@ public class CommandMethodsScanner {
         }
 
 
-        private String toDocumentEvent(String name) {
+        /**
+         * Changes a string from a name into a document event. If it is
+         * already in the format of a document event, return it unchanged
+         * @param name The input string
+         * @return The name as a document event
+         */
+        private String toDocumentEvent(final String name) {
             return null != eventNameDeterminant
                     ? eventNameDeterminant.toDocumentEvent(name)
                     : String.format("evt%s", name);
         }
 
 
-        private EventFamily determineEventFamily(String eventName) {
+        /**
+         * Determine if an event is an AWT or a document event
+         *
+         * @param eventName The event name
+         * @return The {@link EventFamily} associated with the event
+         */
+        private EventFamily determineEventFamily(final String eventName) {
             EventFamily result = null != eventNameDeterminant
                     ? eventNameDeterminant.examineName(eventName)
                     : EventFamily.Introspection;

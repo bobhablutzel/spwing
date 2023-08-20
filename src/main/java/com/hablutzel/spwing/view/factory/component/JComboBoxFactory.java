@@ -48,7 +48,7 @@ public final class JComboBoxFactory extends AbstractViewComponentFactory<JComboB
     public Cocoon<JComboBox> build(String name, ConversionService conversionService) {
         JComboBox comboBox = new JComboBox();
         registerAdapter(comboBox, name, JComboBoxEventAdapter::new);
-        return new Cocoon<>(comboBox, this, conversionService) {
+        return new Cocoon<>(comboBox, this, conversionService, "selected") {
 
             private boolean itemsSet = false;
 
@@ -61,16 +61,6 @@ public final class JComboBoxFactory extends AbstractViewComponentFactory<JComboB
             }
 
             @Override
-            public AllowedBindings allowedBindings(String propertyName) {
-                return switch (propertyName) {
-                    case "items" -> AllowedBindings.FROM_MODEL;
-                    case "selected" -> AllowedBindings.BIDIRECTIONAL;
-                    default -> super.allowedBindings(propertyName);
-                };
-            }
-
-
-            @Override
             @SuppressWarnings("unchecked")
             public void setProperty(String propertyName, Object value) {
                 if ("items".equals(propertyName)) {
@@ -81,10 +71,10 @@ public final class JComboBoxFactory extends AbstractViewComponentFactory<JComboB
                         Arrays.stream(valueAsClass.getEnumConstants()).forEach(comboBox::addItem);
                     }
                 } else if ("selected".equals(propertyName)) {
-                    comboBox.setSelectedItem(value);
                     if (!itemsSet && value.getClass().isEnum()) {
                         setProperty("items", value.getClass());
                     }
+                    comboBox.setSelectedItem(value);
                 } else {
                     super.setProperty(propertyName, value);
                 }

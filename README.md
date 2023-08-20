@@ -14,7 +14,7 @@ The <i><u>ridiculously</u></i> easy cross-platform GUI framework
 </p>
 
 Spwing provides a cross-platform application development framework that merges the wide
-platform support of Java Swing with the powerful and intuitive programming style of Swing - 
+platform support of Java Swing with the powerful and intuitive programming style of Spring - 
 and adds a few surprises of it's own.
 
 NOTE: Spwing is a work in progress. Some features are incomplete and could change without
@@ -730,7 +730,7 @@ if the expression is of the form ```${property}```, the ```property``` will be e
 an application property. Flexpressions are used with bindings and ```@Value``` annotations
 
 ## SVWF
-Spwing has a build-in domain specific language for creating view files. The language
+Spwing has a built-in domain specific language for creating view files. The language
 is declarative, allowing the specification of the view components, the binding for this
 components, and other capabilities.
 
