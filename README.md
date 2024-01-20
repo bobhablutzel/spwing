@@ -17,8 +17,7 @@ Spwing provides a cross-platform application development framework that merges t
 platform support of Java Swing with the powerful and intuitive programming style of Spring - 
 and adds a few surprises of it's own.
 
-NOTE: Spwing is a work in progress. Some features are incomplete and could change without
-notice. However, the basic functionality works.
+NOTE: Work on Spwing has been suspended as it never got much traction. The code remains in open source but not further updates are expected.
 
 ## Features
 
